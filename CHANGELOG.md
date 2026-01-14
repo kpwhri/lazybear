@@ -7,18 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-01-13
+
 ### Added
 
-- README with overview, installation, quickstart examples (scan_table, scan_sql_query, select/filter/with_columns, joins,
-  group_by/agg, order_by/sort/limit, iter_rows/collect_batches, I/O write_csv/write_parquet, to_arrow, explain) and a
-  License section referencing LICENSE.txt and https://kpwhri.mit-license.org
+- README.md with documentation and examples
+- Workflows for publishing to pypi
 
 ## [0.1.0] - 2026-01-12
 
 ### Changed
 
-- Separated out as a separate repo
+- Separated out as a distinct repo
 
-[unreleased]: https://github.com/kpwhri/lazybear/compare/v0.1.0..HEAD
+[unreleased]: https://github.com/kpwhri/lazybear/compare/v0.1.1..HEAD
 
-[0.1.1]: https://github.com/kpwhri/lazybear/releases/tag/v0.1.0
+[0.1.1]: https://github.com/kpwhri/lazybear/compare/v0.1.0..v0.1.1
+
+[0.1.0]: https://github.com/kpwhri/lazybear/releases/tag/v0.1.0
