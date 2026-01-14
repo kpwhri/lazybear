@@ -2,12 +2,18 @@
 name = "lazybear-polars"
 version = "0.1.0"
 description = "Polars-like lazy access to a database."
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "polars>=1.36.1",
     "pyarrow>=22.0.0",
     "sqlalchemy>=2.0.45",
 ]
+
+[project.urls]
+Homepage = "https://github.com/kpwhri/lazybear"
+Repository = "https://github.com/kpwhri/lazybear"
+Issues = "https://github.com/kpwhri/lazybear/issues"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
