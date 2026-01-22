@@ -148,14 +148,15 @@ class LazyBearFrame(IOMixin):
         out = LazyBearFrame(self._engine, self._selectable, self._columns, order_keys=order_keys, limit=self._limit)
         return out
 
-    def sort(self, by: Any, more_by: Any | None = None, descending: bool | Sequence[bool] = False) -> 'LazyBearFrame':
+    def sort(self, by: Any, *more_by: Any, descending: bool | Sequence[bool] = False) -> 'LazyBearFrame':
         """order_by with polars-style API"""
-        keys = [by]
-        if more_by is not None:
-            if isinstance(more_by, (list, tuple)):
-                keys.extend(more_by)
-            else:
-                keys.append(more_by)
+        if isinstance(by, (list, tuple)):
+            keys = by
+        else:
+            keys = [by]
+
+        for more in more_by:
+            keys.append(more)
 
         def _flatten_keys(x: Any) -> list[Any]:
             if isinstance(x, (list, tuple)):

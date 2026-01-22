@@ -7,7 +7,26 @@ from lazybear import scan_table, col, scan_sql_query
 
 
 @pytest.fixture()
-def sqlite_engine():
+def users_df():
+    return pl.from_records([
+        {'id': 1, 'name': 'Ahti', 'age': 30},
+        {'id': 2, 'name': 'Kalma', 'age': 28},
+        {'id': 3, 'name': 'Tellervo', 'age': 41},
+        {'id': 4, 'name': 'Ukko', 'age': 41},
+    ])
+
+
+@pytest.fixture()
+def orders_df():
+    return pl.from_records([
+        {'id': 10, 'user_id': 1, 'amount': 12.5},
+        {'id': 11, 'user_id': 1, 'amount': 7.5},
+        {'id': 12, 'user_id': 2, 'amount': 99.0},
+    ])
+
+
+@pytest.fixture()
+def sqlite_engine(users_df, orders_df):
     eng = sa.create_engine('sqlite:///:memory:')
     meta = sa.MetaData()
 
@@ -28,17 +47,8 @@ def sqlite_engine():
     meta.create_all(eng)
 
     with eng.begin() as conn:
-        conn.execute(t_users.insert(), [
-            {'id': 1, 'name': 'Ahti', 'age': 30},
-            {'id': 2, 'name': 'Kalma', 'age': 28},
-            {'id': 3, 'name': 'Tellervo', 'age': 41},
-            {'id': 4, 'name': 'Ukko', 'age': 41},
-        ])
-        conn.execute(t_orders.insert(), [
-            {'id': 10, 'user_id': 1, 'amount': 12.5},
-            {'id': 11, 'user_id': 1, 'amount': 7.5},
-            {'id': 12, 'user_id': 2, 'amount': 99.0},
-        ])
+        conn.execute(t_users.insert(), list(users_df.iter_rows(named=True)))
+        conn.execute(t_orders.insert(), list(orders_df.iter_rows(named=True)))
 
     yield eng
 
@@ -225,20 +235,33 @@ def test_to_arrow_optional(sqlite_engine):
     assert tab.num_rows == 2
 
 
-def test_sort_polars_style(sqlite_engine):
+@pytest.mark.parametrize('by, descending', [
+    ('age', True),
+    ('age', False),
+    (['age', 'name'], [True, False]),
+    (['age', 'name'], [False, True]),
+])
+def test_sort_polars_style(sqlite_engine, users_df, by, descending):
     users = scan_table('users', sqlite_engine)
-    # Single key ascending
-    out1 = users.sort(by='age').collect()
-    assert out1['age'].to_list() == sorted(out1['age'].to_list())
+    out = users.sort(by=by, descending=descending).collect()
+    assert out['age'].to_list() == users_df.sort(by, descending=descending)['age'].to_list()
 
-    # Single key descending
-    out2 = users.sort(by='age', descending=True).collect()
-    assert out2['age'].to_list() == sorted(out2['age'].to_list(), reverse=True)
 
-    # Multiple keys using by + more_by, descending broadcast
-    out3 = users.sort(by='age', more_by='name', descending=[True, False]).collect()
-    ages = out3['age'].to_list()
-    assert ages == sorted(ages, reverse=True)
+def test_sort_limit(sqlite_engine, users_df):
+    users = scan_table('users', sqlite_engine)
+    # limit 1
+    out = users.sort(by='age', descending=True).limit(1).collect()
+    assert out['age'].to_list() == users_df.sort(by='age', descending=True).head(1)['age'].to_list()
+    out = users.sort(by='age', descending=False).limit(1).collect()
+    assert out['age'].to_list() == users_df.sort(by='age', descending=False).head(1)['age'].to_list()
+
+
+def test_sort_select(sqlite_engine, users_df):
+    users = scan_table('users', sqlite_engine)
+    out = users.sort(by='age', descending=True).select('age').limit(1).collect()
+    assert out['age'].to_list() == users_df.sort(by='age', descending=True).head(1)['age'].to_list()
+    out = users.sort(by='age', descending=False).select('age').limit(1).collect()
+    assert out['age'].to_list() == users_df.sort(by='age', descending=False).head(1)['age'].to_list()
 
 
 def test_sort_desc_flags_validation(sqlite_engine):
