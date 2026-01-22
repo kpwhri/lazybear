@@ -21,6 +21,12 @@ The purpose of this library is to provide lazy, polars-like access to a single s
 * Optional:
     - `pyarrow` for `to_arrow()`
 
+Install from PyPI:
+
+```
+pip install lazybear-polars
+```
+
 Install from source using pip:
 
 ```
