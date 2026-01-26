@@ -34,7 +34,28 @@ def test_temp_table_join_with_regular_table(sqlite_engine, hero_df):
     lf_temp = scan_df(hero_df, sqlite_engine, table_name='temp_heroes')
     lf_table = scan_table('myth_info', sqlite_engine)
 
+    # join df -> table
     joined_df = lf_temp.join(lf_table, on='name').collect()
+
+    assert joined_df.shape == (3, 4)
+    assert 'origin' in joined_df.columns
+    assert 'power' in joined_df.columns
+    assert all(joined_df['origin'] == 'Kalevala')
+
+
+def test_regular_table_join_with_temp_table(sqlite_engine, hero_df):
+    with sqlite_engine.connect() as conn:
+        conn.execute(sa.text('CREATE TABLE myth_info (name TEXT, origin TEXT)'))
+        conn.execute(sa.text("INSERT INTO myth_info VALUES ('Väinämöinen', 'Kalevala')"))
+        conn.execute(sa.text("INSERT INTO myth_info VALUES ('Joukahainen', 'Kalevala')"))
+        conn.execute(sa.text("INSERT INTO myth_info VALUES ('Ilmarinen', 'Kalevala')"))
+        conn.commit()
+
+    lf_temp = scan_df(hero_df, sqlite_engine, table_name='temp_heroes')
+    lf_table = scan_table('myth_info', sqlite_engine)
+
+    # join table -> df
+    joined_df = lf_table.join(lf_temp, on='name').collect()
 
     assert joined_df.shape == (3, 4)
     assert 'origin' in joined_df.columns

@@ -39,6 +39,7 @@ class LazyBearFrame(IOMixin):
             columns: Mapping[str, sa.ColumnElement[Any]],
             order_keys: list[tuple[str, bool]] | None = None,
             limit: int | None = None,
+            _upstream: Sequence[LazyBearFrame] | None = None,
     ):
         self._engine = engine
         self._selectable = selectable  # a FromClause/Subquery providing column namespace
@@ -46,6 +47,7 @@ class LazyBearFrame(IOMixin):
         # store ordering as (column_name, descending?)
         self._order_keys: list[tuple[str, bool]] = list(order_keys) if order_keys else []
         self._limit = limit
+        self._upstream = list(_upstream) if _upstream else []
 
     @property
     def engine(self) -> Engine:
@@ -97,11 +99,7 @@ class LazyBearFrame(IOMixin):
         return self._rebuild(sq, cols)
 
     def _rebuild(self, selectable: sa.sql.Selectable, columns: Mapping[str, sa.ColumnElement[Any]]) -> 'LazyBearFrame':
-        if isinstance(self, TempLazyBearFrame):
-            return TempLazyBearFrame(
-                self._engine, self._df, self._table_name, selectable, columns, self._order_keys, self._limit,
-            )
-        return LazyBearFrame(self._engine, selectable, columns, self._order_keys, self._limit)
+        return LazyBearFrame(self._engine, selectable, columns, self._order_keys, self._limit, [self])
 
     def filter(self, predicate: Any) -> 'LazyBearFrame':
         """Emulate polars filter, but must use `col` rather than `pl.col`"""
@@ -281,7 +279,9 @@ class LazyBearFrame(IOMixin):
         sel = sa.select(*select_list).select_from(j)
         sq = sel.subquery()
         cols = {c.key: sq.c[c.key] for c in sq.c}
-        return self._rebuild(sq, cols)
+        out = self._rebuild(sq, cols)
+        out._upstream = [self, other]
+        return out
 
     def group_by(self, *keys: str) -> 'GroupedLazyBearFrame':
         for k in keys:
@@ -302,18 +302,50 @@ class LazyBearFrame(IOMixin):
             sel = sel.limit(self._limit)
         return sel
 
+    def _find_temp_frames(self) -> list[TempLazyBearFrame]:
+        """Traverse the upstream chain to find all TempLazyBearFrames that need to be materialized."""
+        temps: list[TempLazyBearFrame] = []
+        if isinstance(self, TempLazyBearFrame):
+            temps.append(self)
+        for up in self._upstream:
+            temps.extend(up._find_temp_frames())
+        # de-duplicate by table name to avoid redundant inserts if joined/re-used
+        seen = set()
+        unique_temps = []
+        for t in temps:
+            if t._table_name not in seen:
+                unique_temps.append(t)
+                seen.add(t._table_name)
+        return unique_temps
+
     def collect(self, limit: int | None = None, *, infer_schema_length=200) -> pl.DataFrame:
         """Execute and return a polars DataFrame.
 
         If `limit` is provided, apply a limit/top where supported by the backend (sqlalchemy will translate limit).
         """
+        temp_frames = self._find_temp_frames()
+
         sel = self.to_select()
         if limit is not None:
             sel = sel.limit(limit)
+
         with self._engine.connect() as conn:
-            res = conn.execute(sel)
-            rows = res.fetchall()
-            names = res.keys()
+            if temp_frames:
+                with conn.begin():
+                    for tf in temp_frames:
+                        tf._create_and_insert(conn)
+                    try:
+                        res = conn.execute(sel)
+                        rows = res.fetchall()
+                        names = res.keys()
+                    finally:
+                        for tf in temp_frames:
+                            tf._cleanup(conn)
+            else:
+                res = conn.execute(sel)
+                rows = res.fetchall()
+                names = res.keys()
+
         return pl.DataFrame(rows, schema=list(names), infer_schema_length=infer_schema_length)
 
     def explain(self) -> str:
@@ -328,15 +360,34 @@ class LazyBearFrame(IOMixin):
         """Yield polars DataFrames in chunks without loading all rows in memory."""
         if not isinstance(chunk_size, int) or chunk_size <= 0:
             raise ValueError('chunk_size must be a positive integer')
+        
+        temp_frames = self._find_temp_frames()
         sel = self.to_select()
+        
         with self._engine.connect() as conn:
-            res = conn.execution_options(stream_results=True).execute(sel)
-            names = list(res.keys())
-            while True:
-                rows = res.fetchmany(chunk_size)
-                if not rows:
-                    break
-                yield pl.DataFrame(rows, schema=names)
+            if temp_frames:
+                with conn.begin():
+                    for tf in temp_frames:
+                        tf._create_and_insert(conn)
+                    try:
+                        res = conn.execution_options(stream_results=True).execute(sel)
+                        names = list(res.keys())
+                        while True:
+                            rows = res.fetchmany(chunk_size)
+                            if not rows:
+                                break
+                            yield pl.DataFrame(rows, schema=names)
+                    finally:
+                        for tf in temp_frames:
+                            tf._cleanup(conn)
+            else:
+                res = conn.execution_options(stream_results=True).execute(sel)
+                names = list(res.keys())
+                while True:
+                    rows = res.fetchmany(chunk_size)
+                    if not rows:
+                        break
+                    yield pl.DataFrame(rows, schema=names)
 
     def iter_rows(self, *, named: bool = False, chunk_size: int = 10_000) -> Iterator[tuple[Any, ...] | dict[str, Any]]:
         """Iterate over result rows with polars-compatible semantics."""
@@ -406,6 +457,7 @@ class TempLazyBearFrame(LazyBearFrame):
             columns: Mapping[str, sa.ColumnElement[Any]] | None = None,
             order_keys: list[tuple[str, bool]] | None = None,
             limit: int | None = None,
+            _upstream: Sequence[LazyBearFrame] | None = None,
     ):
         self._df = df
         self._table_name = table_name or f'lb_temp_{uuid.uuid4().hex[:8]}'
@@ -422,14 +474,14 @@ class TempLazyBearFrame(LazyBearFrame):
             if selectable is None:
                 selectable = sa.table(self._table_name, *[sa.column(n) for n in df.columns])
 
-        super().__init__(engine, selectable, cols, order_keys, limit)
+        super().__init__(engine, selectable, cols, order_keys, limit, _upstream)
 
     def _rebuild(self, selectable: sa.sql.Selectable, columns: Mapping[str, sa.ColumnElement[Any]]) -> 'LazyBearFrame':
         if isinstance(self, TempLazyBearFrame):
             return TempLazyBearFrame(
-                self._engine, self._df, self._table_name, selectable, columns, self._order_keys, self._limit
+                self._engine, self._df, self._table_name, selectable, columns, self._order_keys, self._limit, [self]
             )
-        return LazyBearFrame(self._engine, selectable, columns, self._order_keys, self._limit)
+        return LazyBearFrame(self._engine, selectable, columns, self._order_keys, self._limit, [self])
 
     def _create_and_insert(self, conn: sa.Connection, *, chunk_size=10_000):
         """Create the temp table and insert the dataframe data."""
@@ -531,36 +583,7 @@ class TempLazyBearFrame(LazyBearFrame):
         return super().to_select()
 
     def collect(self, limit: int | None = None, *, infer_schema_length=200) -> pl.DataFrame:
-        with self._engine.connect() as conn:
-            # for some dbs, temp tables are only visible in the same transaction/connection
-            with conn.begin():
-                self._create_and_insert(conn)
-                try:
-                    sel = self.to_select()
-                    if limit is not None:
-                        sel = sel.limit(limit)
-                    res = conn.execute(sel)
-                    rows = res.fetchall()
-                    names = res.keys()
-                    out_df = pl.DataFrame(rows, schema=list(names), infer_schema_length=infer_schema_length)
-                finally:
-                    self._cleanup(conn)
-        return out_df
+        return super().collect(limit=limit, infer_schema_length=infer_schema_length)
 
     def collect_batches(self, chunk_size: int = 10_000) -> Iterator[pl.DataFrame]:
-        if not isinstance(chunk_size, int) or chunk_size <= 0:
-            raise ValueError('chunk_size must be a positive integer')
-        with self._engine.connect() as conn:
-            with conn.begin():
-                self._create_and_insert(conn)
-                try:
-                    sel = self.to_select()
-                    res = conn.execution_options(stream_results=True).execute(sel)
-                    names = list(res.keys())
-                    while True:
-                        rows = res.fetchmany(chunk_size)
-                        if not rows:
-                            break
-                        yield pl.DataFrame(rows, schema=names)
-                finally:
-                    self._cleanup(conn)
+        return super().collect_batches(chunk_size=chunk_size)
