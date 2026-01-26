@@ -87,7 +87,6 @@ Now, let's see what we can do:
 
 ```python
 
-# import lazybear
 from lazybear import scan_table, scan_sql_query, col
 
 # scan tables lazily
@@ -151,6 +150,41 @@ expr_df = (
 print(expr_df)
 ```
 
+### Uploading Temp Tables (Beta)
+
+You can use a local polars DataFrame in lazy sql operations by creating a temporary table. This is useful for joining local data with database tables.
+
+Be aware that the table will be inserted when `collect` is called. After the collection is complete, a best effort attempt to delete the temp table will be completed.
+
+```python
+import polars as pl
+from lazybear import scan_df, scan_table, col
+
+# local polars dataframe
+df_local = pl.DataFrame({
+    'user_id': [1, 3],
+    'status': ['active', 'inactive']
+})
+
+# create a temp table frame
+lf_temp = scan_df(df_local, eng, table_name='user_status')
+
+# join with a database table
+lf_users = scan_table('users', eng)
+result = (
+    lf_users
+    .join(lf_temp, on={'id': 'user_id'})
+    .select('name', 'status')
+    .collect()
+)
+```
+
+**Limitations & Behavior:**
+- Temp tables are created and data is inserted only when `collect()` (or another execution method) is called.
+- Best-effort cleanup (DROP TABLE) is performed after the data is fetched.
+- Currently offers _beta_ support for sqlite, PostgreSQL, SQL Server (MSSQL), Oracle, and Teradata. A warning is issued for other dialects.
+- For certain dialects, will attempt bulk insert to speed up processing
+
 #### Exporting Data
 
 Finally, we'll 
@@ -188,7 +222,7 @@ print(lf_users.filter(col('age') > 30).explain())
 
 - CSV
 
-```
+```python
 # single file
 lf_users.order_by('id').write_csv('users.csv', include_header=True)
 
@@ -198,7 +232,7 @@ lf_users.order_by('id').write_csv('users_chunked.csv', chunk_size=2, include_hea
 
 - Parquet
 
-```
+```python
 # single file
 lf_users.collect().write_parquet('users.parquet')
 
@@ -220,7 +254,7 @@ Notes:
 
 ### Minimal example
 
-```
+```python
 import sqlalchemy as sa
 from lazybear import scan_table, col
 

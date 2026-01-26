@@ -2,14 +2,23 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence, Iterator
 
+import warnings
+import uuid
 import sqlalchemy as sa
 from sqlalchemy.engine import Engine
 
 import polars as pl
 
-from .io import IOMixin
-from .expressions import Expr, AliasedExpr, _to_sa
-from .engine import _inline_for_select, _normalize_predicate, _same_server
+from lazybear.db.insert.dispatch import bulk_insert_fast
+from lazybear.io import IOMixin
+from lazybear.expressions import Expr, AliasedExpr
+from lazybear.engine import _inline_for_select, _normalize_predicate, _same_server
+
+
+def _to_sa(x: Any, lf: 'LazyBearFrame') -> sa.ColumnElement[Any]:
+    # avoid circular import by local import
+    from .expressions import _to_sa as _real_to_sa
+    return _real_to_sa(x, lf)
 
 
 class LazyBearFrame(IOMixin):
@@ -85,18 +94,25 @@ class LazyBearFrame(IOMixin):
         sel = sa.select(*sa_cols).select_from(self._selectable)
         sq = sel.subquery()
         cols = {c.key: sq.c[c.key] for c in sq.c}
-        return LazyBearFrame(self._engine, sq, cols, order_keys=self._order_keys, limit=self._limit)
+        return self._rebuild(sq, cols)
+
+    def _rebuild(self, selectable: sa.sql.Selectable, columns: Mapping[str, sa.ColumnElement[Any]]) -> 'LazyBearFrame':
+        if isinstance(self, TempLazyBearFrame):
+            return TempLazyBearFrame(
+                self._engine, self._df, self._table_name, selectable, columns, self._order_keys, self._limit,
+            )
+        return LazyBearFrame(self._engine, selectable, columns, self._order_keys, self._limit)
 
     def filter(self, predicate: Any) -> 'LazyBearFrame':
         """Emulate polars filter, but must use `col` rather than `pl.col`"""
         where_expr = _normalize_predicate(_to_sa(predicate, self))
         # build a select that preserves current columns without introducing an extra nesting level
-        base_cols = [self._selectable.c[name] for name in self.columns]
+        base_cols = [self._selectable.c[name].label(name) for name in self.columns]
         sel = sa.select(*base_cols).select_from(self._selectable).where(where_expr)
         # rebuild column namespace from the subquery
         sq = sel.subquery()
         cols = {c.key: sq.c[c.key] for c in sq.c}
-        return LazyBearFrame(self._engine, sq, cols, order_keys=self._order_keys, limit=self._limit)
+        return self._rebuild(sq, cols)
 
     def with_columns(self, *exprs: Any, **named: Any) -> 'LazyBearFrame':
         """Add or replace columns using expressions, keeping existing columns.
@@ -123,7 +139,7 @@ class LazyBearFrame(IOMixin):
         sel = sa.select(*select_list).select_from(self._selectable)
         sq = sel.subquery()
         cols = {c.key: sq.c[c.key] for c in sq.c}
-        return LazyBearFrame(self._engine, sq, cols, order_keys=self._order_keys, limit=self._limit)
+        return self._rebuild(sq, cols)
 
     def order_by(self, *keys: Any) -> 'LazyBearFrame':
         if len(keys) == 1 and isinstance(keys[0], (list, tuple)):
@@ -145,8 +161,9 @@ class LazyBearFrame(IOMixin):
                 raise TypeError('order_by() only supports column names (str) in this API')
             else:
                 raise TypeError('order_by() keys must be str or Expr')
-        out = LazyBearFrame(self._engine, self._selectable, self._columns, order_keys=order_keys, limit=self._limit)
-        return out
+        new_lf = self._rebuild(self._selectable, self._columns)
+        new_lf._order_keys = order_keys
+        return new_lf
 
     def sort(self, by: Any, *more_by: Any, descending: bool | Sequence[bool] = False) -> 'LazyBearFrame':
         """order_by with polars-style API"""
@@ -181,14 +198,15 @@ class LazyBearFrame(IOMixin):
                 raise TypeError('sort keys must be column names (str) in this API')
             else:
                 raise TypeError('sort keys must be str or Expr')
-        out = LazyBearFrame(self._engine, self._selectable, self._columns, order_keys=order_keys, limit=self._limit)
-        return out
+        new_lf = self._rebuild(self._selectable, self._columns)
+        new_lf._order_keys = order_keys
+        return new_lf
 
     def limit(self, n: int) -> 'LazyBearFrame':
         if not isinstance(n, int) or n < 0:
             raise ValueError('limit must be a non-negative integer')
         # materialize ordering + limit into a subquery so subsequent filters apply after the limit
-        base_cols = [self._selectable.c[name] for name in self.columns]
+        base_cols = [self._selectable.c[name].label(name) for name in self.columns]
         sel = sa.select(*base_cols).select_from(self._selectable)
         if self._order_keys:
             order_exprs = []
@@ -200,7 +218,7 @@ class LazyBearFrame(IOMixin):
         sq = sel.subquery()
         cols = {c.key: sq.c[c.key] for c in sq.c}
         # after making limit into a subquery, clear order/limit state to avoid reapplying outside
-        return LazyBearFrame(self._engine, sq, cols)
+        return self._rebuild(sq, cols)
 
     def join(
             self,
@@ -235,10 +253,7 @@ class LazyBearFrame(IOMixin):
         if join_type not in {'inner', 'left', 'right', 'full'}:
             raise ValueError("how must be one of 'inner', 'left', 'right', 'full'")
 
-        left_cols = {name: self._resolve_column(name) for name in self.columns}
-        right_cols = {name: other._resolve_column(name) for name in other.columns}
-
-        on_clauses = [left_cols[lk] == right_cols[rk] for lk, rk in zip(left_keys, right_keys)]
+        on_clauses = [self._selectable.c[lk] == other._selectable.c[rk] for lk, rk in zip(left_keys, right_keys)]
         on_expr = sa.and_(*on_clauses)
 
         if join_type == 'inner':
@@ -257,16 +272,16 @@ class LazyBearFrame(IOMixin):
         select_list: list[sa.ColumnElement[Any]] = []
         # select left columns with original names
         for name in self.columns:
-            select_list.append(self._resolve_column(name).label(name))
+            select_list.append(self._selectable.c[name].label(name))
         # select right columns, suffix overlaps
         for name in other.columns:
             lbl = name if name not in overlap else f'{name}{right_suffix}'
-            select_list.append(other._resolve_column(name).label(lbl))
+            select_list.append(other._selectable.c[name].label(lbl))
 
         sel = sa.select(*select_list).select_from(j)
         sq = sel.subquery()
         cols = {c.key: sq.c[c.key] for c in sq.c}
-        return LazyBearFrame(self._engine, sq, cols)
+        return self._rebuild(sq, cols)
 
     def group_by(self, *keys: str) -> 'GroupedLazyBearFrame':
         for k in keys:
@@ -276,7 +291,7 @@ class LazyBearFrame(IOMixin):
 
     def to_select(self) -> sa.Select:
         """Select all columns from current selectable"""
-        sel = sa.select(*[self._selectable.c[name] for name in self.columns]).select_from(self._selectable)
+        sel = sa.select(*[self._selectable.c[name].label(name) for name in self.columns]).select_from(self._selectable)
         if self._order_keys:
             order_exprs = []
             for name, desc in self._order_keys:
@@ -373,4 +388,179 @@ class GroupedLazyBearFrame:
         )
         sq = sel.subquery()
         cols = {c.key: sq.c[c.key] for c in sq.c}
-        return LazyBearFrame(self._lf._engine, sq, cols)
+        return self._lf._rebuild(sq, cols)
+
+
+class TempLazyBearFrame(LazyBearFrame):
+    """A LazyBearFrame that holds a polars DataFrame and inserts it into a temp table upon collection.
+
+    This allows using a local polars DataFrame in lazy sql operations like joins.
+    """
+
+    def __init__(
+            self,
+            engine: Engine,
+            df: pl.DataFrame,
+            table_name: str | None = None,
+            selectable: sa.sql.Selectable | None = None,
+            columns: Mapping[str, sa.ColumnElement[Any]] | None = None,
+            order_keys: list[tuple[str, bool]] | None = None,
+            limit: int | None = None,
+    ):
+        self._df = df
+        self._table_name = table_name or f'lb_temp_{uuid.uuid4().hex[:8]}'
+        self._temp_table_created = False
+
+        if columns is None:
+            # create initial selectable from the df schema
+            # we use sa.table and sa.column to represent the eventual temp table
+            cols = {name: sa.column(name) for name in df.columns}
+            selectable = sa.table(self._table_name, *[sa.column(n) for n in df.columns])
+        else:
+            cols = dict(columns)
+            # Use the provided selectable (which could be a subquery)
+            if selectable is None:
+                selectable = sa.table(self._table_name, *[sa.column(n) for n in df.columns])
+
+        super().__init__(engine, selectable, cols, order_keys, limit)
+
+    def _rebuild(self, selectable: sa.sql.Selectable, columns: Mapping[str, sa.ColumnElement[Any]]) -> 'LazyBearFrame':
+        if isinstance(self, TempLazyBearFrame):
+            return TempLazyBearFrame(
+                self._engine, self._df, self._table_name, selectable, columns, self._order_keys, self._limit
+            )
+        return LazyBearFrame(self._engine, selectable, columns, self._order_keys, self._limit)
+
+    def _create_and_insert(self, conn: sa.Connection, *, chunk_size=10_000):
+        """Create the temp table and insert the dataframe data."""
+        dialect = self._engine.dialect.name
+        # normalize dialect names
+        if 'sqlite' in dialect:
+            dialect = 'sqlite'
+        elif 'oracle' in dialect:
+            dialect = 'oracle'
+        elif 'mssql' in dialect:
+            dialect = 'mssql'
+        elif 'teradata' in dialect:
+            dialect = 'teradata'
+        elif 'postgres' in dialect:
+            dialect = 'postgresql'
+        else:
+            warnings.warn(f'Unsupported dialect for temp tables: {dialect}. Falling back to default behavior.')
+
+        # create table definition
+        metadata = sa.MetaData()
+
+        # map polars types to sqlalchemy types
+        type_map = {
+            pl.Int64: sa.BigInteger,
+            pl.Int32: sa.Integer,
+            pl.Int16: sa.SmallInteger,
+            pl.Int8: sa.SmallInteger,
+            pl.UInt64: sa.BigInteger,
+            pl.UInt32: sa.BigInteger,
+            pl.Float64: sa.Float,
+            pl.Float32: sa.Float,
+            pl.Boolean: sa.Boolean,
+            pl.Utf8: sa.String,
+            pl.String: sa.String,
+            pl.Date: sa.Date,
+            pl.Datetime: sa.DateTime,
+        }
+
+        sa_cols = []
+        for name, dtype in self._df.schema.items():
+            sa_type = type_map.get(dtype, sa.String)
+            sa_cols.append(sa.Column(name, sa_type))
+
+        # dialect-specific temp table creation
+        prefixes = []
+        create_kwargs = {}
+        if dialect == 'sqlite':
+            prefixes = ['TEMPORARY']
+        elif dialect == 'postgresql':
+            prefixes = ['TEMPORARY']
+        elif dialect == 'mssql':
+            if not self._table_name.startswith('#'):
+                self._table_name = f'#{self._table_name}'
+        elif dialect == 'oracle':
+            prefixes = ['GLOBAL TEMPORARY']
+            create_kwargs['oracle_on_commit'] = 'PRESERVE ROWS'
+        elif dialect == 'teradata':
+            prefixes = ['VOLATILE']
+            create_kwargs['teradata_on_commit'] = 'PRESERVE ROWS'
+
+        table = sa.Table(
+            self._table_name,
+            metadata,
+            *sa_cols,
+            prefixes=prefixes,
+            **create_kwargs,
+        )
+
+        create_stmt = sa.schema.CreateTable(table)
+        conn.execute(create_stmt)
+
+        # try for connection-specific fast bulk insert
+        try:
+            bulk_insert_fast(conn, self._df, self._table_name, self._df.columns)
+        except Exception as e:
+            batch = []  # stream rows from polars
+            for row in self._df.iter_rows(named=True, buffer_size=chunk_size):
+                batch.append(row)
+                if len(batch) >= chunk_size:
+                    conn.execute(table.insert(), batch)
+                    batch.clear()
+            if batch:
+                conn.execute(table.insert(), batch)
+
+        self._temp_table_created = True
+
+    def _cleanup(self, conn: sa.Connection):
+        """Best-effort cleanup of the temp table."""
+        if self._temp_table_created:
+            try:
+                conn.execute(sa.text(f'DROP TABLE {self._table_name}'))
+            except Exception as e:
+                # best-effort
+                warnings.warn(f'Failed to cleanup temp table {self._table_name}: {e}')
+            finally:
+                self._temp_table_created = False
+
+    def to_select(self) -> sa.Select:
+        return super().to_select()
+
+    def collect(self, limit: int | None = None, *, infer_schema_length=200) -> pl.DataFrame:
+        with self._engine.connect() as conn:
+            # for some dbs, temp tables are only visible in the same transaction/connection
+            with conn.begin():
+                self._create_and_insert(conn)
+                try:
+                    sel = self.to_select()
+                    if limit is not None:
+                        sel = sel.limit(limit)
+                    res = conn.execute(sel)
+                    rows = res.fetchall()
+                    names = res.keys()
+                    out_df = pl.DataFrame(rows, schema=list(names), infer_schema_length=infer_schema_length)
+                finally:
+                    self._cleanup(conn)
+        return out_df
+
+    def collect_batches(self, chunk_size: int = 10_000) -> Iterator[pl.DataFrame]:
+        if not isinstance(chunk_size, int) or chunk_size <= 0:
+            raise ValueError('chunk_size must be a positive integer')
+        with self._engine.connect() as conn:
+            with conn.begin():
+                self._create_and_insert(conn)
+                try:
+                    sel = self.to_select()
+                    res = conn.execution_options(stream_results=True).execute(sel)
+                    names = list(res.keys())
+                    while True:
+                        rows = res.fetchmany(chunk_size)
+                        if not rows:
+                            break
+                        yield pl.DataFrame(rows, schema=names)
+                finally:
+                    self._cleanup(conn)

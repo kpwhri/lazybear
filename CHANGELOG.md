@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - More tests around sorting
+- Ability to upload temp tables for joining (beta, limited db support)
 
 ### Changed
 

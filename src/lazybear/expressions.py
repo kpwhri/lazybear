@@ -157,7 +157,8 @@ def _to_sa(x: Any, lf: 'LazyBearFrame') -> sa.ColumnElement[Any]:
     - if a polars expression is passed accidentally, raise TypeError for clarity
     """
     try:
-        if isinstance(x, pl.Expr):
+        import polars as _pl
+        if isinstance(x, _pl.Expr):
             raise TypeError('received a Polars expression in a sql lazy context')
     except Exception:
         # if polars is unavailable or type check fails, continue with normal handling

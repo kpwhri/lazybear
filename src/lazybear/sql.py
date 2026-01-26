@@ -2,10 +2,29 @@ from __future__ import annotations
 
 from typing import Sequence
 
+import polars as pl
 import sqlalchemy as sa
 from sqlalchemy import Engine
 
-from lazybear.core import LazyBearFrame
+from lazybear.core import LazyBearFrame, TempLazyBearFrame
+
+
+def scan_df(df: pl.DataFrame, engine: Engine, table_name: str | None = None) -> TempLazyBearFrame:
+    """Create a TempLazyBearFrame from a polars DataFrame.
+
+    The DataFrame will be inserted into a temporary table on the database when
+    the frame is collected or otherwise executed.
+
+    Parameters:
+        df : polars.DataFrame
+            The DataFrame to insert.
+        engine : sqlalchemy.Engine
+            The sqlalchemy engine connected to the database.
+        table_name : str | None
+            Optional name for the temporary table. If not provided, a random name
+            will be generated.
+    """
+    return TempLazyBearFrame(engine, df, table_name)
 
 
 def scan_table(

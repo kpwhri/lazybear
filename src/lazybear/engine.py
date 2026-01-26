@@ -66,8 +66,13 @@ def _normalize_predicate(expr: sa.ColumnElement[Any]) -> sa.ColumnElement[Any]:
     """Normalize boolean predicates to dialect-friendly constructs.
 
     - Convert bound boolean parameters to sa.true()/sa.false()
+    - Convert Expr objects to sa expressions (if they leaked here)
     - Leave other expressions untouched
     """
+    from .expressions import Expr
+    if isinstance(expr, Expr):
+        # This shouldn't happen with proper _to_sa usage but let's be safe
+        raise TypeError('Expr object reached _normalize_predicate; it should have been converted to sa expression.')
     if isinstance(expr, sa.BindParameter):
         val = expr.value
         if isinstance(val, bool):
