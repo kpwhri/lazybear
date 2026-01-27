@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed how arguments are handled when sorting by multiple keys
 
+### Fixed
+
+- Apply tablename changes (e.g., for SQL Server temp table) in the init of TempLazyFrame
+
 ## [0.1.1] - 2026-01-13
 
 ### Added

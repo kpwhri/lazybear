@@ -461,6 +461,9 @@ class TempLazyBearFrame(LazyBearFrame):
     ):
         self._df = df
         self._table_name = table_name or f'lb_temp_{uuid.uuid4().hex[:8]}'
+        # need to handle tablename changes here
+        if engine.dialect.name == 'mssql':
+            self._table_name = self._table_name if self._table_name.startswith('#') else f'#{self._table_name}'
         self._temp_table_created = False
 
         if columns is None:
