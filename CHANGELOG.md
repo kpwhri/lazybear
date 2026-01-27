@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Apply tablename changes (e.g., for SQL Server temp table) in the init of TempLazyFrame
+- Apply tablename changes (e.g., for SQL Server temp table) in the init of TempLazyBearFrame
+- Ensuring that teradata has `ON COMMIT PRESERVE ROWS` appended during temp table creation
 
 ## [0.1.1] - 2026-01-13
 

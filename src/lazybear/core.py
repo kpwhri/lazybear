@@ -360,10 +360,10 @@ class LazyBearFrame(IOMixin):
         """Yield polars DataFrames in chunks without loading all rows in memory."""
         if not isinstance(chunk_size, int) or chunk_size <= 0:
             raise ValueError('chunk_size must be a positive integer')
-        
+
         temp_frames = self._find_temp_frames()
         sel = self.to_select()
-        
+
         with self._engine.connect() as conn:
             if temp_frames:
                 with conn.begin():
@@ -543,7 +543,12 @@ class TempLazyBearFrame(LazyBearFrame):
             create_kwargs['oracle_on_commit'] = 'PRESERVE ROWS'
         elif dialect == 'teradata':
             prefixes = ['VOLATILE']
-            create_kwargs['teradata_on_commit'] = 'PRESERVE ROWS'
+
+            @sa.ext.compiler.compiles(sa.schema.CreateTable, 'teradatasql')
+            def _td_create_table(element, compiler, **kw):
+                sql = compiler.visit_create_table(element, **kw)
+                sql += ' ON COMMIT PRESERVE ROWS'
+                return sql
 
         table = sa.Table(
             self._table_name,
