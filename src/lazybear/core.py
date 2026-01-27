@@ -535,9 +535,9 @@ class TempLazyBearFrame(LazyBearFrame):
             prefixes = ['TEMPORARY']
         elif dialect == 'postgresql':
             prefixes = ['TEMPORARY']
+            create_kwargs['postgresql_on_commit'] = 'PRESERVE ROWS'
         elif dialect == 'mssql':
-            if not self._table_name.startswith('#'):
-                self._table_name = f'#{self._table_name}'
+            pass  # table name change handled in init
         elif dialect == 'oracle':
             prefixes = ['GLOBAL TEMPORARY']
             create_kwargs['oracle_on_commit'] = 'PRESERVE ROWS'
