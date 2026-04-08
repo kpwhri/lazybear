@@ -12,6 +12,8 @@ The purpose of this library is to provide lazy, polars-like access to a single s
 - Zero data is loaded until you call `collect()`/`to_arrow()`/writers
 - Convenient I/O helpers for CSV and Parquet (using polars)
 
+[Full API Documentation](docs/index.md)
+
 ## Installation
 
 * LazyBear targets Python 3.10+.
@@ -245,11 +247,30 @@ Notes:
 - `write_csv`/`write_parquet` use polars under the hood. For chunked Parquet, files are created with a numeric suffix.
 - `to_arrow()` requires `pyarrow` to be installed.
 
+### Properties
+
+- `columns`: Returns a list of column names in the frame.
+- `engine`: Returns the SQLAlchemy `Engine` that the frame is bound to.
+
+### Materialization & Execution
+
+- `collect(limit=None, infer_schema_length=200)`: Materializes the lazy query into a polars `DataFrame`.
+- `to_arrow(limit=None)`: Materializes the query into a `pyarrow.Table`.
+- `collect_batches(chunk_size=10_000)`: Returns an iterator of polars `DataFrame` chunks.
+- `iter_rows(named=False, chunk_size=10_000)`: Returns an iterator of row tuples (or dicts if `named=True`).
+- `explain()`: Returns the rendered SQL string for the query.
+
+### I/O Helpers
+
+- `write_parquet(file, chunk_size=None, start_index=0, **kwargs)`: Writes the result to one or more Parquet files.
+- `write_csv(file, chunk_size=None, **kwargs)`: Writes the result to a CSV file.
+
 ### Advanced
 
+- immutability: every transform (`select`, `filter`, `with_columns`, `join`, `sort`, `limit`, `group_by`) returns a new `LazyBearFrame`.
+- `to_select()` returns the current SQLAlchemy `Select` if you need to interop with SQLAlchemy APIs directly.
 - case sensitivity: `scan_table(..., lowercase=True)` exposes columns as lowercase labels by default. Set
   `lowercase=False` to preserve database-reflected casing.
-- `to_select()` returns the current SQLAlchemy `Select` if you need to interop with SQLAlchemy APIs directly.
 - `explain()` returns the rendered SQL string; if supported, literal binds are inlined.
 
 ### Minimal example
