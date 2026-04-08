@@ -23,6 +23,7 @@ dependencies = [
 Homepage = "https://github.com/kpwhri/lazybear"
 Repository = "https://github.com/kpwhri/lazybear"
 Issues = "https://github.com/kpwhri/lazybear/issues"
+Documentation = "https://kpwhri.github.io/lazybear/"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
