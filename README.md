@@ -12,7 +12,9 @@ The purpose of this library is to provide lazy, polars-like access to a single s
 - Zero data is loaded until you call `collect()`/`to_arrow()`/writers
 - Convenient I/O helpers for CSV and Parquet (using polars)
 
-[Full API Documentation](docs/index.md)
+Full API documentation:
+* [Markdown](docs/index.md)
+* [Github Pages](https://kpwhri.github.io/lazybear)
 
 ## Installation
 
