@@ -3,14 +3,13 @@ name = "lazybear-polars"
 version = "0.2.1"
 description = "Polars-like lazy access to a database."
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
     { name = "dcronkite", email = "dcronkite+pypi@gmail.com" }
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
 ]
 requires-python = ">=3.10"
 dependencies = [
