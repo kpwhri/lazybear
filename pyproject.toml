@@ -1,6 +1,6 @@
 [project]
 name = "lazybear-polars"
-version = "0.2.0"
+version = "0.2.1"
 description = "Polars-like lazy access to a database."
 readme = "README.md"
 license = { text = "MIT" }
