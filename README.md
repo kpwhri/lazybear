@@ -243,6 +243,7 @@ arrow_tbl = lf_users.to_arrow()
 print(lf_users.filter(col('age') > 30).explain())
 ```
 
+
 ### I/O helpers
 
 - CSV
@@ -296,6 +297,37 @@ Notes:
 - case sensitivity: `scan_table(..., lowercase=True)` exposes columns as lowercase labels by default. Set
   `lowercase=False` to preserve database-reflected casing.
 - `explain()` returns the rendered SQL string; if supported, literal binds are inlined.
+
+
+#### Database-specific result cleaning
+
+`lazybear` applies a small database-specific cleaning step after SQL results are materialized into a polars `DataFrame`.
+
+Currently, this is used for Teradata connections, including connections using the `teradatasql` driver. Teradata character datatypes may return values padded with trailing whitespace. When `lazybear` detects a Teradata connection, trailing whitespace is stripped from string columns in collected results.
+
+This applies to result materialization methods such as:
+
+- `collect()`
+- `collect_batches()`
+- `iter_rows()`, through `collect_batches()`
+
+For example, a Teradata value like:
+```
+python
+"ABC   "
+```
+is returned as:
+```
+python
+"ABC"
+```
+This cleaning is intentionally implemented through a dispatch layer so that future database-specific cleanup behavior can be added in one place. For example, other dialects could eventually normalize driver-specific string padding, timestamp quirks, binary values, or other result-formatting issues before returning a polars `DataFrame`.
+
+**Notes:**
+
+- The Teradata cleanup only affects string columns.
+- It strips trailing whitespace, not leading whitespace.
+- Non-Teradata connections currently return results unchanged by this cleaning step.
 
 ### Minimal example
 

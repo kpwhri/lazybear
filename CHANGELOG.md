@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-06
+
 ### Changed
 
 - Altered license documentation in `pyproject.toml` to use SPDX license expression
-- Added cleaning step so that teradata spaces appended to char variables are stripped
+- Added a database-specific result cleaning dispatch, currently used to strip trailing whitespace from teradata/`teradatasql` string/utf8 results
 
 ## [0.2.1] - 2026-04-07
 
@@ -48,7 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Separated out as a distinct repo
 
-[unreleased]: https://github.com/kpwhri/lazybear/compare/v0.2.1..HEAD
+[unreleased]: https://github.com/kpwhri/lazybear/compare/v0.3.0..HEAD
+
+[0.3.0]: https://github.com/kpwhri/lazybear/compare/v0.2.1..v0.3.0
 
 [0.2.1]: https://github.com/kpwhri/lazybear/compare/v0.2.0..v0.2.1
 

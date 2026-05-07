@@ -86,6 +86,7 @@ lf.group_by('department').agg(
 #### `collect(limit=None, infer_schema_length=200)`
 
 - Executes the query and returns a `polars.DataFrame`.
+- Some database dialects may apply result cleaning after materialization. For example, Teradata/`teradatasql` string columns have trailing whitespace stripped to account for character datatype padding.
 
 #### `to_arrow(limit=None)`
 
@@ -94,10 +95,12 @@ lf.group_by('department').agg(
 #### `collect_batches(chunk_size=10_000)`
 
 - Streams the query in batches, yielding `polars.DataFrame` chunks.
+- Some database dialects may apply result cleaning after materialization. For example, Teradata/`teradatasql` string columns have trailing whitespace stripped to account for character datatype padding.
 
 #### `iter_rows(named=False, chunk_size=10_000)`
 
 - Yields rows as tuples (default) or dictionaries (if `named=True`).
+- Some database dialects may apply result cleaning after materialization. For example, Teradata/`teradatasql` string columns have trailing whitespace stripped to account for character datatype padding.
 
 #### `explain()`
 
