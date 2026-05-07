@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Altered license documentation in `pyproject.toml` to use SPDX licence expression
+- Altered license documentation in `pyproject.toml` to use SPDX license expression
+- Added cleaning step so that teradata spaces appended to char variables are stripped
 
 ## [0.2.1] - 2026-04-07
 

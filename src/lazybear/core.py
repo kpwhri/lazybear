@@ -9,6 +9,7 @@ from sqlalchemy.engine import Engine
 
 import polars as pl
 
+from lazybear.db.clean.dispatch import clean_dataframe
 from lazybear.db.insert.dispatch import bulk_insert_fast
 from lazybear.io import IOMixin
 from lazybear.expressions import Expr, AliasedExpr
@@ -346,7 +347,8 @@ class LazyBearFrame(IOMixin):
                 rows = res.fetchall()
                 names = res.keys()
 
-        return pl.DataFrame(rows, schema=list(names), infer_schema_length=infer_schema_length)
+        df = pl.DataFrame(rows, schema=list(names), infer_schema_length=infer_schema_length)
+        return clean_dataframe(self._engine, df)
 
     def explain(self) -> str:
         sel = self.to_select()
@@ -376,7 +378,8 @@ class LazyBearFrame(IOMixin):
                             rows = res.fetchmany(chunk_size)
                             if not rows:
                                 break
-                            yield pl.DataFrame(rows, schema=names)
+                            df = pl.DataFrame(rows, schema=names)
+                            yield clean_dataframe(self._engine, df)
                     finally:
                         for tf in temp_frames:
                             tf._cleanup(conn)
@@ -387,7 +390,8 @@ class LazyBearFrame(IOMixin):
                     rows = res.fetchmany(chunk_size)
                     if not rows:
                         break
-                    yield pl.DataFrame(rows, schema=names)
+                    df = pl.DataFrame(rows, schema=names)
+                    yield clean_dataframe(self._engine, df)
 
     def iter_rows(self, *, named: bool = False, chunk_size: int = 10_000) -> Iterator[tuple[Any, ...] | dict[str, Any]]:
         """Iterate over result rows with polars-compatible semantics."""

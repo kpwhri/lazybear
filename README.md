@@ -18,7 +18,7 @@ Full API documentation:
 
 ## Installation
 
-* LazyBear targets Python 3.10+.
+* LazyBear targets Python 3.11+.
 * Required dependencies:
     - `sqlalchemy`
     - `polars`
