@@ -132,6 +132,27 @@ joined_df = (
 )
 print(joined_df)
 
+# joins (left columns keep names; right overlaps get suffixed with `_y` by default)
+joined_df = (
+    lf_users
+    .join(lf_orders, on={'id': 'user_id'}, how='left')
+    .select('id', 'name', 'age', ('amount_y', col('amount')))
+    .collect()
+)
+print(joined_df)
+
+# when chaining multiple joins that overlap on the same column names,
+# provide a different suffixes=... value for later joins to avoid label collisions.
+chained_join_df = (
+    lf_users
+    .join(lf_orders, on={'id': 'user_id'}, how='left')
+    .join(lf_orders, on={'id': 'user_id'}, how='left', suffixes=('_x2', '_y2'))
+    .select('id', 'name', 'amount', 'amount_y2')
+    .order_by('id', 'amount', 'amount_y2')
+    .collect()
+)
+print(chained_join_df)
+
 # group_by + aggregations
 agg_df = (
     lf_users
@@ -271,6 +292,7 @@ Notes:
 
 - immutability: every transform (`select`, `filter`, `with_columns`, `join`, `sort`, `limit`, `group_by`) returns a new `LazyBearFrame`.
 - `to_select()` returns the current SQLAlchemy `Select` if you need to interop with SQLAlchemy APIs directly.
+- join column naming: overlapping right-side columns are suffixed with `_y` by default; If you chain multiple joins that would reuse the same labels, pass custom `suffixes` on later joins to keep names unique.
 - case sensitivity: `scan_table(..., lowercase=True)` exposes columns as lowercase labels by default. Set
   `lowercase=False` to preserve database-reflected casing.
 - `explain()` returns the rendered SQL string; if supported, literal binds are inlined.

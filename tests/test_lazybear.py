@@ -1,7 +1,5 @@
-import pytest
-import sqlalchemy as sa
-
 import polars as pl
+import pytest
 
 from lazybear import scan_table, col, scan_sql_query
 
@@ -318,3 +316,22 @@ def test_limit_applies_in_order(sqlite_engine):
     age41 = scan_table('users', sqlite_engine).order_by('age').limit(1).filter(col('age') == 41)
     result_df = age41.collect()
     assert result_df.height == 0
+
+
+def test_join_two_left_joins_on_same_id(sqlite_engine):
+    users = scan_table('users', sqlite_engine)
+    orders = scan_table('orders', sqlite_engine)
+    orders2 = scan_table('orders', sqlite_engine)
+
+    out = (
+        users
+        .join(orders, on={'id': 'user_id'}, how='left')
+        .join(orders2, on={'id': 'user_id'}, how='left', suffixes=('_x2', '_y2'))
+        .select('id', 'name', 'amount', 'amount_y2')
+        .order_by('id', 'amount', 'amount_y2')
+        .collect()
+    )
+
+    assert isinstance(out, pl.DataFrame)
+    assert 'amount' in out.columns and 'amount_y2' in out.columns
+    assert 3 in out['id'].to_list() and 4 in out['id'].to_list()
