@@ -121,6 +121,27 @@ def test_str_startswith_any(sqlite_engine):
     assert out['name'].to_list() == ['Ahti', 'Kalma']
 
 
+def test_str_startswith_any_str(sqlite_engine):
+    users = scan_table('users', sqlite_engine)
+    out = users.filter(
+        col('name').str.starts_with_any('ak')
+    ).select('name').order_by('name').collect()
+    assert out['name'].to_list() == []
+
+
+def test_starts_with_any_treats_string_as_single_prefix(sqlite_engine):
+    users = scan_table('users', sqlite_engine)
+
+    out = (
+        users
+        .filter(col('name').str.starts_with_any('At'))
+        .select('name')
+        .collect()
+    )
+
+    assert out.height == 0
+
+
 def test_join_left_on_right_on_list_mismatch_raises(sqlite_engine):
     users = scan_table('users', sqlite_engine)
     orders = scan_table('orders', sqlite_engine)
@@ -316,3 +337,10 @@ def test_join_two_left_joins_on_same_id(sqlite_engine):
     assert isinstance(out, pl.DataFrame)
     assert 'amount' in out.columns and 'amount_y2' in out.columns
     assert 3 in out['id'].to_list() and 4 in out['id'].to_list()
+
+
+def test_polars_expr_in_filter_gets_helpful_error(sqlite_engine):
+    users = scan_table('users', sqlite_engine)
+
+    with pytest.raises(TypeError, match=r"use col\('dx'\)"):
+        users.filter(pl.col('name').is_null()).collect()

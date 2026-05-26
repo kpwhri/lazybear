@@ -51,7 +51,13 @@ class _StrNS:
         return Expr(_compile)
 
     def contains_any(self, patterns: Sequence[Any], *, literal: bool | None = None) -> Expr:
-        vals = list(patterns) if patterns is not None else []
+        if patterns is None:
+            vals = []
+        elif isinstance(patterns, (str, bytes)):
+            vals = [patterns]
+        else:
+            vals = list(patterns)
+
         if len(vals) == 0:
             return Expr(lambda lf: sa.false())
 
@@ -88,7 +94,13 @@ class _StrNS:
         return self.starts_with_any(prefixes)
 
     def starts_with_any(self, prefixes: Sequence[Any]) -> Expr:
-        vals = list(prefixes) if prefixes is not None else []
+        if prefixes is None:
+            vals = []
+        elif isinstance(prefixes, (str, bytes)):
+            vals = [prefixes]
+        else:
+            vals = list(prefixes)
+
         if len(vals) == 0:
             return Expr(lambda lf: sa.false())
         exprs = [self.starts_with(v) for v in vals]

@@ -18,6 +18,24 @@ from lazybear.engine import _inline_for_select, _normalize_predicate, _same_serv
 
 
 def _to_sa(x: Any, lf: 'LazyBearFrame') -> sa.ColumnElement[Any]:
+    """convert user input to a sqlalchemy expression
+
+    - Expr -> compile in context
+    - sqlalchemy element -> pass-through
+    - other -> literal bind parameter
+    - if a polars expression is passed accidentally, raise TypeError for clarity
+    """
+    try:
+        import polars as _pl
+        if isinstance(x, _pl.Expr):
+            raise TypeError(
+                'Received a Polars expression in a LazyBear SQL context. '
+                'Use `from lazybear import col`; col(...) instead of polars.col(...) or pl.col(...). '
+                "For example: use col('dx').str.starts_with_any(['A20']) rather than "
+                "pl.col('dx').str.starts_with_any(['A20'])."
+            )
+    except ImportError:
+        pass
     # avoid circular import by local import
     from .expressions import _to_sa as _real_to_sa
     return _real_to_sa(x, lf)

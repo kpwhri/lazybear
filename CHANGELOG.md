@@ -7,10 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Better error message when `pl.col` rather than `col` is used
+
 ### Fixed
 
 - Cleaned up `join`, dropping suffixes and adding prefix/suffix as well as options for how to handle duplicates (
   `rename` vs `drop`).
+- Issue where sequence parameter would treat string as a list
 
 ## [0.3.0] - 2026-05-06
 
