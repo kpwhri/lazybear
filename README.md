@@ -13,6 +13,7 @@ The purpose of this library is to provide lazy, polars-like access to a single s
 - Convenient I/O helpers for CSV and Parquet (using polars)
 
 Full API documentation:
+
 * [Markdown](docs/index.md)
 * [Github Pages](https://kpwhri.github.io/lazybear)
 
@@ -48,6 +49,7 @@ Below is an end-to-end walkthrough using an in-memory sqlite database. The same 
 supported by sqlalchemy.
 
 #### Create Playgruond
+
 First, let's setup the backend play data:
 
 ```python
@@ -87,6 +89,7 @@ with eng.begin() as conn:
 ```
 
 #### Implemented SQL Operations
+
 Now, let's see what we can do:
 
 ```python
@@ -123,14 +126,23 @@ print(ordered_df)
 sorted_df = lf_users.sort(by='age', descending=True).collect()
 print(sorted_df)
 
-# joins (left columns keep names; right overlaps get suffixed with `_y` by default)
+# joins
 joined_df = (
     lf_users
-    .join(lf_orders, on={'id': 'user_id'}, how='left')
-    .select('id', 'name', 'age', ('amount_y', col('amount')))
+    .join(lf_orders, left_on='id', right_on='user_id', how='left')
+    .select('id', 'name', 'age', 'amount')
     .collect()
 )
 print(joined_df)
+
+# rename all right-side columns with a prefix
+prefixed_join_df = (
+    lf_users
+    .join(lf_orders, left_on='id', right_on='user_id', how='left', prefix='order_')
+    .select('id', 'name', 'order_id', 'order_amount')
+    .collect()
+)
+print(prefixed_join_df)
 
 # joins (left columns keep names; right overlaps get suffixed with `_y` by default)
 joined_df = (
@@ -177,9 +189,11 @@ print(expr_df)
 
 ### Uploading Temp Tables (Beta)
 
-You can use a local polars DataFrame in lazy sql operations by creating a temporary table. This is useful for joining local data with database tables.
+You can use a local polars DataFrame in lazy sql operations by creating a temporary table. This is useful for joining
+local data with database tables.
 
-Be aware that the table will be inserted when `collect` is called. After the collection is complete, a best effort attempt to delete the temp table will be completed.
+Be aware that the table will be inserted when `collect` is called. After the collection is complete, a best effort
+attempt to delete the temp table will be completed.
 
 ```python
 import polars as pl
@@ -205,14 +219,16 @@ result = (
 ```
 
 **Limitations & Behavior:**
+
 - Temp tables are created and data is inserted only when `collect()` (or another execution method) is called.
 - Best-effort cleanup (DROP TABLE) is performed after the data is fetched.
-- Currently offers _beta_ support for sqlite, PostgreSQL, SQL Server (MSSQL), Oracle, and Teradata. A warning is issued for other dialects.
+- Currently offers _beta_ support for sqlite, PostgreSQL, SQL Server (MSSQL), Oracle, and Teradata. A warning is issued
+  for other dialects.
 - For certain dialects, will attempt bulk insert to speed up processing
 
 #### Exporting Data
 
-Finally, we'll 
+Finally, we'll
 
 ```python
 # iterating rows
@@ -243,7 +259,6 @@ arrow_tbl = lf_users.to_arrow()
 print(lf_users.filter(col('age') > 30).explain())
 ```
 
-
 ### I/O helpers
 
 - CSV
@@ -271,10 +286,69 @@ Notes:
 - `write_csv`/`write_parquet` use polars under the hood. For chunked Parquet, files are created with a numeric suffix.
 - `to_arrow()` requires `pyarrow` to be installed.
 
+## API
+
 ### Properties
 
 - `columns`: Returns a list of column names in the frame.
 - `engine`: Returns the SQLAlchemy `Engine` that the frame is bound to.
+
+### Joins
+
+`join` keeps left-side columns unchanged and then appends columns from the right-side frame.
+
+| Option                | Default    | Behavior                                                                                                                                                  |
+|-----------------------|------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `how`                 | `'inner'`  | Join type: `'inner'`, `'left'`, `'right'`, or `'full'`.                                                                                                   |
+| `on`                  | `None`     | Join key or keys. Use a string/list when key names match, or a mapping like `{'left_id': 'right_id'}` when key names differ.                              |
+| `left_on`, `right_on` | `None`     | Explicit left and right join keys. Use these instead of `on`.                                                                                             |
+| `prefix`              | `None`     | Prefix for right-side renamed columns. Takes precedence over `suffix` and deprecated `suffixes`.                                                          |
+| `suffix`              | `None`     | Suffix for right-side renamed columns. Used only when `prefix` is not supplied.                                                                           |
+| `apply_to_all`        | `True`     | When using `prefix` or `suffix`, apply it to every right-side column. Set to `False` to rename only right-side columns that overlap with left-side names. |
+| `duplicate_columns`   | `'rename'` | Use `'rename'` to rename overlapping right-side columns, or `'drop'` to omit them.                                                                        |
+| `suffixes`            | `None`     | Deprecated. Use `suffix` or `prefix` instead. If supplied, `suffixes[-1]` is used for right-side column renaming.                                         |
+
+Right-side naming precedence is:
+
+1. `prefix`
+2. `suffix`
+3. `suffixes[-1]`
+4. generated suffix such as `_right` or `_right2`
+
+`prefix` and `suffix` are not combined. If both are supplied, `prefix` wins.
+
+Examples:
+
+```python
+# Default: duplicate right-side names are renamed with a generated suffix.
+joined = lf_users.join(lf_orders, on={'id': 'user_id'}, how='left')
+# columns: id, name, age, id_right, user_id, amount
+
+# Prefix every right-side column.
+joined = lf_users.join(lf_orders, on={'id': 'user_id'}, prefix='order_')
+# columns: id, name, age, order_id, order_user_id, order_amount
+
+# Suffix every right-side column.
+joined = lf_users.join(lf_orders, on={'id': 'user_id'}, suffix='_order')
+# columns: id, name, age, id_order, user_id_order, amount_order
+
+# Suffix only overlapping right-side columns.
+joined = lf_users.join(
+    lf_orders,
+    on={'id': 'user_id'},
+    suffix='_order',
+    apply_to_all=False,
+)
+# columns: id, name, age, id_order, user_id, amount
+
+# Drop overlapping right-side columns.
+joined = lf_users.join(
+    lf_orders,
+    on={'id': 'user_id'},
+    duplicate_columns='drop',
+)
+# columns: id, name, age, user_id, amount
+```
 
 ### Materialization & Execution
 
@@ -291,19 +365,22 @@ Notes:
 
 ### Advanced
 
-- immutability: every transform (`select`, `filter`, `with_columns`, `join`, `sort`, `limit`, `group_by`) returns a new `LazyBearFrame`.
+- immutability: every transform (`select`, `filter`, `with_columns`, `join`, `sort`, `limit`, `group_by`) returns a new
+  `LazyBearFrame`.
 - `to_select()` returns the current SQLAlchemy `Select` if you need to interop with SQLAlchemy APIs directly.
-- join column naming: overlapping right-side columns are suffixed with `_y` by default; If you chain multiple joins that would reuse the same labels, pass custom `suffixes` on later joins to keep names unique.
+- join column naming: overlapping right-side columns are suffixed with `_y` by default; If you chain multiple joins that
+  would reuse the same labels, pass custom `suffixes` on later joins to keep names unique.
 - case sensitivity: `scan_table(..., lowercase=True)` exposes columns as lowercase labels by default. Set
   `lowercase=False` to preserve database-reflected casing.
 - `explain()` returns the rendered SQL string; if supported, literal binds are inlined.
-
 
 #### Database-specific result cleaning
 
 `lazybear` applies a small database-specific cleaning step after SQL results are materialized into a polars `DataFrame`.
 
-Currently, this is used for Teradata connections, including connections using the `teradatasql` driver. Teradata character datatypes may return values padded with trailing whitespace. When `lazybear` detects a Teradata connection, trailing whitespace is stripped from string columns in collected results.
+Currently, this is used for Teradata connections, including connections using the `teradatasql` driver. Teradata
+character datatypes may return values padded with trailing whitespace. When `lazybear` detects a Teradata connection,
+trailing whitespace is stripped from string columns in collected results.
 
 This applies to result materialization methods such as:
 
@@ -312,16 +389,22 @@ This applies to result materialization methods such as:
 - `iter_rows()`, through `collect_batches()`
 
 For example, a Teradata value like:
+
 ```
 python
 "ABC   "
 ```
+
 is returned as:
+
 ```
 python
 "ABC"
 ```
-This cleaning is intentionally implemented through a dispatch layer so that future database-specific cleanup behavior can be added in one place. For example, other dialects could eventually normalize driver-specific string padding, timestamp quirks, binary values, or other result-formatting issues before returning a polars `DataFrame`.
+
+This cleaning is intentionally implemented through a dispatch layer so that future database-specific cleanup behavior
+can be added in one place. For example, other dialects could eventually normalize driver-specific string padding,
+timestamp quirks, binary values, or other result-formatting issues before returning a polars `DataFrame`.
 
 **Notes:**
 

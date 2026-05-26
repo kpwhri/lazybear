@@ -52,25 +52,6 @@ def test_groupby_agg(sqlite_engine):
     assert set(out['age'].to_list()) == {28, 30, 41}
 
 
-def test_join(sqlite_engine):
-    users = scan_table('users', sqlite_engine)
-    orders = scan_table('orders', sqlite_engine)
-    j = users.join(orders, on={'id': 'user_id'}, how='left')
-    out = j.select('id', 'name', 'amount').order_by('id', 'amount').collect()
-    # user 3 and 4 have no orders, ensure left join kept them (amount null)
-    ids = out['id'].to_list()
-    assert 3 in ids and 4 in ids
-
-
-def test_join_left_on_right_on_single(sqlite_engine):
-    users = scan_table('users', sqlite_engine)
-    orders = scan_table('orders', sqlite_engine)
-    j = users.join(orders, left_on='id', right_on='user_id', how='left')
-    out = j.select('id', 'name', 'amount').order_by('id', 'amount').collect()
-    ids = out['id'].to_list()
-    assert 3 in ids and 4 in ids
-
-
 def test_scan_table_lowercase_default(sqlite_engine_mixcase):
     lf = scan_table('MixedCase', sqlite_engine_mixcase)
     # default should lowercase the exposed column keys

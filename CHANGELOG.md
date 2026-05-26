@@ -7,12 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Cleaned up `join`, dropping suffixes and adding prefix/suffix as well as options for how to handle duplicates (
+  `rename` vs `drop`).
+
 ## [0.3.0] - 2026-05-06
 
 ### Changed
 
 - Altered license documentation in `pyproject.toml` to use SPDX license expression
-- Added a database-specific result cleaning dispatch, currently used to strip trailing whitespace from teradata/`teradatasql` string/utf8 results
+- Added a database-specific result cleaning dispatch, currently used to strip trailing whitespace from teradata/
+  `teradatasql` string/utf8 results
 
 ## [0.2.1] - 2026-04-07
 
