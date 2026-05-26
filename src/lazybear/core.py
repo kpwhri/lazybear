@@ -118,6 +118,61 @@ class LazyBearFrame(IOMixin):
         cols = {c.key: sq.c[c.key] for c in sq.c}
         return self._rebuild(sq, cols)
 
+    def drop(self, *columns: str | Sequence[str], strict: bool = True) -> 'LazyBearFrame':
+        """Remove one or more columns from the frame.
+
+        Parameters:
+            columns:
+                Column names to remove. Accepts varargs or a single list/tuple of
+                column names.
+            strict:
+                Validate that all column names exist in the current schema. If
+                ``True``, raise when any requested column is missing. If ``False``,
+                ignore missing columns.
+
+        Returns:
+            A new ``LazyBearFrame`` containing all current columns except the
+            dropped columns.
+
+        Examples:
+            ```python
+            lf.drop('debug_col')
+            lf.drop('id_right', 'amount_right')
+            lf.drop(['id_right', 'amount_right'])
+            lf.drop('maybe_missing', strict=False)
+            ```
+        """
+
+        if not columns:
+            return self
+        if len(columns) == 1 and not isinstance(columns[0], str):
+            try:
+                names = list(columns[0])
+            except TypeError:
+                names = list(columns)
+        else:
+            names = list(columns)
+
+        invalid = [name for name in names if not isinstance(name, str)]
+        if invalid:
+            raise TypeError('drop() columns must be strings')
+
+        missing = [name for name in names if name not in self._columns]
+        if missing and strict:
+            raise KeyError(f"Column(s) not found: {missing}. Available: {sorted(self._columns)}")
+
+        drop_names = set(names)
+        keep_names = [name for name in self.columns if name not in drop_names]
+
+        if not keep_names:
+            raise ValueError('drop() cannot remove all columns')
+
+        select_list = [self._selectable.c[name].label(name) for name in keep_names]
+        sel = sa.select(*select_list).select_from(self._selectable)
+        sq = sel.subquery()
+        cols = {c.key: sq.c[c.key] for c in sq.c}
+        return self._rebuild(sq, cols)
+
     def _rebuild(self, selectable: sa.sql.Selectable, columns: Mapping[str, sa.ColumnElement[Any]]) -> 'LazyBearFrame':
         return LazyBearFrame(self._engine, selectable, columns, self._order_keys, self._limit, [self])
 

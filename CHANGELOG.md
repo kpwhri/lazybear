@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Better error message when `pl.col` rather than `col` is used
+- Added `drop` to mirror polars.drop behavior
 
 ### Fixed
 
