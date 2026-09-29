@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- more `join` tests for multiple keys
+- `join` documentation
+
 ## [0.3.2] - 2026-09-29
 
 ### Added

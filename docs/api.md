@@ -57,6 +57,7 @@ The main object representing a lazy SQL query. It is immutable; every transforma
 #### `join(other, on=None, *, left_on=None, right_on=None, how='inner', suffixes=('_x', '_y'))`
 
 - Joins with another `LazyBearFrame`.
+- Find more complete documentation [here](join.md)
 
 #### `group_by(*keys)`
 

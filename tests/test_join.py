@@ -1,6 +1,5 @@
-import pytest
-
 import polars as pl
+import pytest
 
 from lazybear import scan_table, col
 
@@ -436,3 +435,69 @@ def test_three_way_join_users_orders_products(sqlite_engine):
     assert out['order_amount'].to_list() == [12.5, 7.5, 99.0, None, None]
     assert out['product_name'].to_list() == ['sampo', 'kantele', 'hiisi', None, None]
     assert out['product_category'].to_list() == ['artifact', 'instrument', 'myth', None, None]
+
+
+def test_join_multiple_left_on_right_on_keys_with_different_names(sqlite_engine):
+    orders = scan_table('orders', sqlite_engine)
+
+    order_lookup = (
+        orders
+        .select(
+            ('lookup_user_id', col('user_id')),
+            ('lookup_product_id', col('product_id')),
+            ('lookup_amount', col('amount')),
+        )
+    )
+
+    out_df = (
+        orders
+        .join(
+            order_lookup,
+            left_on=['user_id', 'product_id'],
+            right_on=['lookup_user_id', 'lookup_product_id'],
+            how='inner',
+        )
+        .select('id', 'user_id', 'product_id', 'amount', 'lookup_amount')
+        .order_by('id')
+        .collect()
+    )
+
+    assert out_df['id'].to_list() == [10, 11, 12]
+    assert out_df['user_id'].to_list() == [1, 1, 2]
+    assert out_df['product_id'].to_list() == [100, 101, 102]
+    assert out_df['amount'].to_list() == [12.5, 7.5, 99.0]
+    assert out_df['lookup_amount'].to_list() == [12.5, 7.5, 99.0]
+
+
+def test_join_multiple_keys_with_different_names(sqlite_engine):
+    orders = scan_table('orders', sqlite_engine)
+
+    order_lookup = (
+        orders
+        .select(
+            ('lookup_user_id', col('user_id')),
+            ('lookup_product_id', col('product_id')),
+            ('lookup_amount', col('amount')),
+        )
+    )
+
+    out_df = (
+        orders
+        .join(
+            order_lookup,
+            on={
+                'user_id': 'lookup_user_id',
+                'product_id': 'lookup_product_id',
+            },
+            how='inner',
+        )
+        .select('id', 'user_id', 'product_id', 'amount', 'lookup_amount')
+        .order_by('id')
+        .collect()
+    )
+
+    assert out_df['id'].to_list() == [10, 11, 12]
+    assert out_df['user_id'].to_list() == [1, 1, 2]
+    assert out_df['product_id'].to_list() == [100, 101, 102]
+    assert out_df['amount'].to_list() == [12.5, 7.5, 99.0]
+    assert out_df['lookup_amount'].to_list() == [12.5, 7.5, 99.0]
