@@ -9,6 +9,7 @@ The purpose of this library is to provide lazy, polars-like access to a single s
 
 - [Quickstart](index.md#quickstart)
 - [API Reference](api.md)
+  - [Joins](join.md)
 - [Expressions & Namespaces](expressions.md)
 
 ## Installation
