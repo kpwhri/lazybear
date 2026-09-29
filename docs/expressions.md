@@ -26,6 +26,36 @@ lf.with_columns(
 )
 ```
 
+### `coalesce(*columns)`
+
+`coalesce` returns the first non-null value. Literal values can be directly included as 'defaults'.
+
+```python
+from lazybear import col, coalesce
+
+lf.with_columns(
+        coalesce(col('nickname'), col('first_name'), 'unknown').alias('display_name'),
+        coalesce(col('score'), 0).alias('score_filled'),
+)
+```
+
+This is equivalent to SQL like:
+
+```sql
+COALESCE(nickname, first_name, 'unknown')
+COALESCE(score, 0)
+```
+
+Use it to replace nulls or choose the first available value across columns.
+
+```python
+lf.filter(
+    coalesce(col('score'), col('bonus'), 0) > 75
+)
+```
+
+`coalesce()` requires at least one argument.
+
 ### Comparison Operators
 Standard Python comparison operators are supported: `==`, `!=`, `>`, `>=`, `<`, `<=`.
 

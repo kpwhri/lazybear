@@ -33,7 +33,22 @@ def products_df():
 
 
 @pytest.fixture()
-def sqlite_engine(users_df, orders_df, products_df):
+def hero_df():
+    return pl.from_records([
+        {'id': 1, 'first_name': 'Väinämöinen', 'nickname': None, 'backup_name': None, 'score': 100, 'bonus': None},
+        {'id': 2, 'first_name': None, 'nickname': 'Jouk', 'backup_name': 'Joukahainen', 'score': None, 'bonus': 50},
+        {'id': 3, 'first_name': None, 'nickname': None, 'backup_name': 'Ilmarinen', 'score': None, 'bonus': None},
+        {'id': 4, 'first_name': 'Lemminkäinen', 'nickname': 'Lempi', 'backup_name': None, 'score': 90, 'bonus': 10},
+        {'id': 5, 'first_name': 'Kullervo', 'nickname': None, 'backup_name': 'Kalervo', 'score': 70, 'bonus': None},
+        {'id': 6, 'first_name': None, 'nickname': 'Louhi', 'backup_name': 'Mistress of Pohjola', 'score': None,
+         'bonus': 95},
+        {'id': 7, 'first_name': 'Aino', 'nickname': None, 'backup_name': None, 'score': None, 'bonus': None},
+        {'id': 8, 'first_name': None, 'nickname': None, 'backup_name': 'Marjatta', 'score': 60, 'bonus': 5},
+    ])
+
+
+@pytest.fixture()
+def sqlite_engine(users_df, orders_df, products_df, hero_df):
     eng = sa.create_engine('sqlite:///:memory:')
     meta = sa.MetaData()
 
@@ -59,12 +74,23 @@ def sqlite_engine(users_df, orders_df, products_df):
         sa.Column('category', sa.String),
     )
 
+    t_heroes = sa.Table(
+        'heroes', meta,
+        sa.Column('id', sa.Integer, primary_key=True),
+        sa.Column('first_name', sa.String),
+        sa.Column('nickname', sa.String),
+        sa.Column('backup_name', sa.String),
+        sa.Column('score', sa.Integer),
+        sa.Column('bonus', sa.Integer),
+    )
+
     meta.create_all(eng)
 
     with eng.begin() as conn:
         conn.execute(t_users.insert(), list(users_df.iter_rows(named=True)))
         conn.execute(t_orders.insert(), list(orders_df.iter_rows(named=True)))
         conn.execute(t_products.insert(), list(products_df.iter_rows(named=True)))
+        conn.execute(t_heroes.insert(), list(hero_df.iter_rows(named=True)))
 
     yield eng
 

@@ -4,8 +4,6 @@ from typing import Any
 
 import sqlalchemy as sa
 
-import polars as pl
-
 
 class Expr:
     """An expression that can be compiled to a sqlalchemy expression in the context of a LazyFrame.
@@ -146,6 +144,19 @@ def col(name: str) -> Expr:
 
 def lit(value: Any) -> Expr:
     return Expr(lambda lf: sa.literal(value))
+
+
+def coalesce(*values: Any) -> Expr:
+    """Return the first non-null value among the provided expressions/literals.
+
+    Examples:
+        coalesce(col('nickname'), col('name'), lit('unknown'))
+        coalesce(col('amount'), 0)
+    """
+    if not values:
+        raise ValueError('Coalesce requires at least one argument')
+
+    return Expr(lambda lf: sa.func.coalesce(*[_to_sa(value, lf) for value in values]))
 
 
 def _to_sa(x: Any, lf: 'LazyBearFrame') -> sa.ColumnElement[Any]:
