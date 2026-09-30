@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-30
+
 ### Added
 
 - more `join` tests for multiple keys
@@ -80,7 +82,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Separated out as a distinct repo
 
-[unreleased]: https://github.com/kpwhri/lazybear/compare/v0.3.2..HEAD
+[unreleased]: https://github.com/kpwhri/lazybear/compare/v0.4.0..HEAD
+
+[0.4.0]: https://github.com/kpwhri/lazybear/compare/v0.3.2..v0.4.0
 
 [0.3.2]: https://github.com/kpwhri/lazybear/compare/v0.3.1..v0.3.2
 
