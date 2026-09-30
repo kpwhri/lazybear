@@ -187,13 +187,14 @@ def test_join_suffix_takes_precedence_over_suffixes(sqlite_engine):
     assert 'id_old_right' not in j.columns
 
 
-def test_join_suffixes_still_supported_with_deprecation_warning(sqlite_engine):
+def test_join_suffixes_not_supported_with_error(sqlite_engine):
     users = scan_table('users', sqlite_engine)
     orders = scan_table('orders', sqlite_engine)
 
-    with pytest.warns(DeprecationWarning):
+    with pytest.raises(ValueError):
         j = users.join(orders, on={'id': 'user_id'}, how='left', suffixes=('_x', '_y'))
 
+    j = users.join(orders, on={'id': 'user_id'}, how='left', suffix='_y')
     assert j.columns == ['id', 'name', 'age', 'id_y', 'user_id_y', 'product_id_y', 'amount_y']
 
 
@@ -201,15 +202,10 @@ def test_join_suffixes_apply_to_duplicates_only_when_apply_to_all_false(sqlite_e
     users = scan_table('users', sqlite_engine)
     orders = scan_table('orders', sqlite_engine)
 
-    with pytest.warns(DeprecationWarning):
-        j = users.join(
-            orders,
-            on={'id': 'user_id'},
-            how='left',
-            suffixes=('_x', '_y'),
-            apply_to_all=False,
-        )
+    with pytest.raises(ValueError):
+        j = users.join(orders, on={'id': 'user_id'}, how='left', suffixes=('_x', '_y'), apply_to_all=False)
 
+    j = users.join(orders, on={'id': 'user_id'}, how='left', suffix='_y', apply_to_all=False)
     assert j.columns == ['id', 'name', 'age', 'id_y', 'user_id', 'product_id', 'amount']
 
 

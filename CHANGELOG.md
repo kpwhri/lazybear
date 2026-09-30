@@ -13,6 +13,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `join` documentation
 - `join_where` function to allow joining with inequalities + tests and doco
 
+### Changed
+
+- Raise an error when `suffixes` is provided (formerly, deprecated)
+
 ## [0.3.2] - 2026-09-29
 
 ### Added

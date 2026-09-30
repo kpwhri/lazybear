@@ -326,9 +326,9 @@ class LazyBearFrame(IOMixin):
             how: str = 'inner',
             suffix: str | None = None,
             prefix: str | None = None,
-            suffixes: tuple[str, str] = None,
             apply_to_all: bool = True,  # only if suffix/prefix selected
             duplicate_columns: Literal['drop', 'rename'] = 'rename',
+            suffixes: tuple[str, str] = None,  # will raise an error
     ) -> 'LazyBearFrame':
         """Join this frame to another ``LazyBearFrame``.
 
@@ -347,20 +347,16 @@ class LazyBearFrame(IOMixin):
                Join type. One of ``'inner'``, ``'left'``, ``'right'``, or ``'full'``.
            suffix:
                Suffix used to rename right-side columns. Ignored when ``prefix`` is
-               provided. Takes precedence over deprecated ``suffixes``.
+               provided.
            prefix:
                Prefix used to rename right-side columns. Takes precedence over
-               ``suffix`` and deprecated ``suffixes``.
-           suffixes:
-               Deprecated. Use ``suffix`` or ``prefix`` instead. When supplied and
-               neither ``prefix`` nor ``suffix`` is supplied, ``suffixes[-1]`` is
-               used for right-side column renaming.
+               ``suffix``.
            apply_to_all:
-               When ``True`` and a ``prefix``/``suffix``/``suffixes`` value is used,
+               When ``True`` and a ``prefix``/``suffix`` value is used,
                apply it to every right-side column. When ``False``, apply it only to
                right-side columns whose names overlap with left-side columns.
 
-               If no explicit ``prefix``/``suffix``/``suffixes`` is supplied and
+               If no explicit ``prefix``/``suffix`` is supplied and
                ``duplicate_columns='rename'``, LazyBear renames only overlapping
                right-side columns using a generated non-conflicting suffix.
            duplicate_columns:
@@ -379,8 +375,7 @@ class LazyBearFrame(IOMixin):
 
            1. ``prefix``
            2. ``suffix``
-           3. ``suffixes[-1]`` for backward compatibility
-           4. generated non-conflicting suffix when ``duplicate_columns='rename'``
+           3. generated non-conflicting suffix when ``duplicate_columns='rename'``
 
            Prefix and suffix are not combined. If both are supplied, ``prefix`` wins.
 
@@ -469,7 +464,7 @@ class LazyBearFrame(IOMixin):
         elif suffix:
             right_suffix = suffix
         elif suffixes:
-            right_suffix = suffixes[-1]
+            raise ValueError(f'Suffixes parameter is not supported. Use `suffix=\'{suffixes[-1]}\'` instead.')
         elif duplicate_columns == 'rename':
             apply_to_all = False
             right_suffix = _dedupe_join_suffix('_right', left_names, right_names)

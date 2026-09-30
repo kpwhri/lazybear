@@ -154,11 +154,11 @@ joined_df = (
 print(joined_df)
 
 # when chaining multiple joins that overlap on the same column names,
-# provide a different suffixes=... value for later joins to avoid label collisions.
+# provide a different suffix=... value for later joins to avoid label collisions.
 chained_join_df = (
     lf_users
     .join(lf_orders, on={'id': 'user_id'}, how='left')
-    .join(lf_orders, on={'id': 'user_id'}, how='left', suffixes=('_x2', '_y2'))
+    .join(lf_orders, on={'id': 'user_id'}, how='left', suffix='_y2')
     .select('id', 'name', 'amount', 'amount_y2')
     .order_by('id', 'amount', 'amount_y2')
     .collect()
@@ -302,18 +302,15 @@ Notes:
 | `how`                 | `'inner'`  | Join type: `'inner'`, `'left'`, `'right'`, or `'full'`.                                                                                                   |
 | `on`                  | `None`     | Join key or keys. Use a string/list when key names match, or a mapping like `{'left_id': 'right_id'}` when key names differ.                              |
 | `left_on`, `right_on` | `None`     | Explicit left and right join keys. Use these instead of `on`.                                                                                             |
-| `prefix`              | `None`     | Prefix for right-side renamed columns. Takes precedence over `suffix` and deprecated `suffixes`.                                                          |
+| `prefix`              | `None`     | Prefix for right-side renamed columns. Takes precedence over `suffix`.                                                                                    |
 | `suffix`              | `None`     | Suffix for right-side renamed columns. Used only when `prefix` is not supplied.                                                                           |
 | `apply_to_all`        | `True`     | When using `prefix` or `suffix`, apply it to every right-side column. Set to `False` to rename only right-side columns that overlap with left-side names. |
 | `duplicate_columns`   | `'rename'` | Use `'rename'` to rename overlapping right-side columns, or `'drop'` to omit them.                                                                        |
-| `suffixes`            | `None`     | Deprecated. Use `suffix` or `prefix` instead. If supplied, `suffixes[-1]` is used for right-side column renaming.                                         |
-
 Right-side naming precedence is:
 
 1. `prefix`
 2. `suffix`
-3. `suffixes[-1]`
-4. generated suffix such as `_right` or `_right2`
+3. generated suffix such as `_right` or `_right2`
 
 `prefix` and `suffix` are not combined. If both are supplied, `prefix` wins.
 
@@ -369,7 +366,7 @@ joined = lf_users.join(
   `LazyBearFrame`.
 - `to_select()` returns the current SQLAlchemy `Select` if you need to interop with SQLAlchemy APIs directly.
 - join column naming: overlapping right-side columns are suffixed with `_y` by default; If you chain multiple joins that
-  would reuse the same labels, pass custom `suffixes` on later joins to keep names unique.
+  would reuse the same labels, pass custom `suffix` on later joins to keep names unique.
 - case sensitivity: `scan_table(..., lowercase=True)` exposes columns as lowercase labels by default. Set
   `lowercase=False` to preserve database-reflected casing.
 - `explain()` returns the rendered SQL string; if supported, literal binds are inlined.

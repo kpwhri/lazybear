@@ -183,8 +183,7 @@ events.join_where(
 
 Set `duplicate_columns='drop'` to omit selected right-side columns from the
 result. They remain available under their renamed predicate names while the
-join condition is compiled. `join_where` intentionally does not support the
-deprecated `suffixes` argument.
+join condition is compiled.
 
 ## Dict form for different key names
 

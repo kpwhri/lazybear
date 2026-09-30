@@ -328,7 +328,7 @@ def test_join_two_left_joins_on_same_id(sqlite_engine):
     out = (
         users
         .join(orders, on={'id': 'user_id'}, how='left')
-        .join(orders2, on={'id': 'user_id'}, how='left', suffixes=('_x2', '_y2'))
+        .join(orders2, on={'id': 'user_id'}, how='left', suffix='_y2')
         .select('id', 'name', 'amount', 'amount_y2')
         .order_by('id', 'amount', 'amount_y2')
         .collect()

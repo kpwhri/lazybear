@@ -52,21 +52,201 @@ The main object representing a lazy SQL query. It is immutable; every transforma
 
 #### `limit(n)`
 
-- Limits the number of rows.
+- Limits the number of rocords returned to `n`.
 
-#### `join(other, on=None, *, left_on=None, right_on=None, how='inner', suffixes=('_x', '_y'))`
 
-- Joins with another `LazyBearFrame`.
-- Find more complete documentation [here](join.md)
+#### `join(other, on=None, *, left_on=None, right_on=None, how='inner', suffix=None, prefix=None, apply_to_all=True, duplicate_columns='rename')`
+
+Join this frame with another `LazyBearFrame` using one or more equality keys.
+
+Both frames must use the same database server.
+
+**Specifying join keys**
+
+Use `on` when the key names are the same:
+
+```python
+users.join(accounts, on='user_id')
+users.join(accounts, on=['user_id', 'region_id'])
+```
+
+Use `left_on` and `right_on` when the key names differ:
+
+```python
+users.join(
+    accounts,
+    left_on='id',
+    right_on='user_id',
+)
+```
+
+A mapping can also associate differently named keys:
+
+```python
+users.join(
+  accounts,
+  on={'id': 'user_id'},
+)
+```
+
+Do not combine `on` with `left_on` or `right_on`.
+
+**Join strategies**
+
+`how` supports:
+
+- `'inner'`: keep matching rows only.
+- `'left'`: keep every left row.
+- `'right'`: keep every right row.
+- `'full'`: keep rows from both sides.
+
+**Right-column naming**
+
+When right-side column names overlap with left-side names:
+
+- `prefix` adds a prefix to right-side columns.
+- `suffix` adds a suffix to right-side columns.
+- `prefix` takes precedence if both are supplied.
+- An explicit prefix or suffix applies to every right-side column by default.
+- Set `apply_to_all=False` to rename only overlapping columns.
+- Without an explicit prefix or suffix, overlapping columns receive a generated suffix such as `_right` or `_right2`.
+
+For example:
+
+```python
+users.join(orders, on={'id': 'user_id'}, prefix='order_')
+```
+
+produces right-side names such as `order_id`, `order_user_id`, and `order_amount`.
+
+To rename only overlapping columns:
+
+```python
+users.join(
+    orders,
+    on={'id': 'user_id'},
+    suffix='_order',
+    apply_to_all=False,
+)
+```
+
+Set `duplicate_columns='drop'` to omit right-side columns that would otherwise be renamed:
+
+```python
+users.join(
+    orders,
+    on={'id': 'user_id'},
+    duplicate_columns='drop',
+)
+```
+
+When the same key name is used on both sides, such as `on='id'`, the duplicate right key is omitted automatically.
+
+See the complete [join documentation](join.md).
+
+---
 
 #### `join_where(other, *predicates, how='inner', suffix=None, prefix=None, apply_to_all=True, duplicate_columns='rename')`
 
-- Joins with another `LazyBearFrame` using one or more equality/inequality predicates.
-- Multiple predicates are combined with `AND`.
-- Supports `inner`, `left`, and `right` joins.
-- Uses the same right-column prefix, suffix, and duplicate-column behavior as `join`.
-- Find examples in the [join documentation](join.md#join-with-equality-and-range-predicates).
-- **Note:** if joining on the same column name, the `other` must be referenced with 
+Join this frame with another `LazyBearFrame` using arbitrary equality or inequality predicates.
+
+This is useful for non-equi joins, including effective-date and interval matching:
+
+```python
+orders.join_where(
+    prices,
+    col('product_id') == col('product_id_right'),
+    col('order_date') >= col('valid_from'),
+    col('order_date') <= col('valid_to'),
+)
+```
+
+This is equivalent to:
+
+```sql
+ON orders.product_id = prices.product_id
+AND orders.order_date >= prices.valid_from
+AND orders.order_date <= prices.valid_to
+```
+
+Multiple predicates are combined with `AND`. To express alternatives within one predicate, combine expressions with `|`.
+
+**Join strategies**
+
+`how` supports:
+
+- `'inner'`: keep matching rows only.
+- `'left'`: keep every left row.
+- `'right'`: keep every right row.
+
+A full join is not supported by `join_where`.
+
+**Referencing right-side columns**
+
+Predicates use the right-column names produced by the prefix and suffix rules.
+
+When a column exists on both sides, the right-side reference receives a generated suffix by default:
+
+```python
+col('id') == col('id_right')
+```
+
+**Do not write:**
+
+```python
+# WRONG!
+col('id') == col('id')
+```
+
+Both expressions resolve to the left-side `id`, producing `left.id = left.id` rather than a comparison between frames.
+
+If an explicit prefix or suffix is supplied, use the resulting names in the predicates. Because explicit naming applies to all right-side columns by default, this example suffixes every right-side reference:
+
+```python
+orders.join_where(
+    prices,
+    col('product_id') == col('product_id_price'),
+    col('order_date') >= col('valid_from_price'),
+    col('order_date') <= col('valid_to_price'),
+    suffix='_price',  # by default, suffix applies to all columns
+)
+```
+
+To rename only overlapping right-side columns:
+
+```python
+orders.join_where(
+    prices,
+    col('product_id') == col('product_id_price'),
+    col('order_date') >= col('valid_from'),
+    col('order_date') <= col('valid_to'),
+    suffix='_price',
+    apply_to_all=False,
+)
+```
+
+`prefix` takes precedence over `suffix` when both are supplied.
+
+**Dropping duplicate columns**
+
+Set `duplicate_columns='drop'` to omit selected right-side columns from the result:
+
+```python
+orders.join_where(
+    prices,
+    col('product_id') == col('product_id_right'),
+    col('order_date') >= col('valid_from'),
+    col('order_date') <= col('valid_to'),
+    duplicate_columns='drop',
+)
+```
+
+Dropped right-side columns remain available under their renamed names while the join predicates are evaluated.
+
+The result row order is not guaranteed. Call `sort` or `order_by` when deterministic ordering is required.
+
+See [equality and range-join examples](join.md#join-with-equality-and-range-predicates).
+
 
 #### `group_by(*keys)`
 
