@@ -59,6 +59,15 @@ The main object representing a lazy SQL query. It is immutable; every transforma
 - Joins with another `LazyBearFrame`.
 - Find more complete documentation [here](join.md)
 
+#### `join_where(other, *predicates, how='inner', suffix=None, prefix=None, apply_to_all=True, duplicate_columns='rename')`
+
+- Joins with another `LazyBearFrame` using one or more equality/inequality predicates.
+- Multiple predicates are combined with `AND`.
+- Supports `inner`, `left`, and `right` joins.
+- Uses the same right-column prefix, suffix, and duplicate-column behavior as `join`.
+- Find examples in the [join documentation](join.md#join-with-equality-and-range-predicates).
+- **Note:** if joining on the same column name, the `other` must be referenced with 
+
 #### `group_by(*keys)`
 
 - Groups by one or more columns. Returns a `GroupedLazyBearFrame`.

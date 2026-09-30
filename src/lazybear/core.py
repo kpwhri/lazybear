@@ -1,20 +1,19 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence, Iterator, Literal
-
-import warnings
 import uuid
-import sqlalchemy as sa
-from sqlalchemy.engine import Engine
+import warnings
+from typing import Any, Iterable, Iterator, Literal, Mapping, Sequence
 
 import polars as pl
+import sqlalchemy as sa
+from sqlalchemy.engine import Engine
 
 from lazybear.db.clean.dispatch import clean_dataframe
 from lazybear.db.insert.dispatch import bulk_insert_fast
 from lazybear.deprecated import deprecated_param
-from lazybear.io import IOMixin
-from lazybear.expressions import Expr, AliasedExpr
 from lazybear.engine import _inline_for_select, _normalize_predicate, _same_server
+from lazybear.expressions import Expr, AliasedExpr
+from lazybear.io import IOMixin
 
 
 def _to_sa(x: Any, lf: 'LazyBearFrame') -> sa.ColumnElement[Any]:
@@ -39,6 +38,29 @@ def _to_sa(x: Any, lf: 'LazyBearFrame') -> sa.ColumnElement[Any]:
     # avoid circular import by local import
     from .expressions import _to_sa as _real_to_sa
     return _real_to_sa(x, lf)
+
+
+def _dedupe_join_suffix(base_suffix: str, left_names: set[str], right_names: Sequence[str]) -> str:
+    candidate = base_suffix
+    i = 2
+    while any(
+            f'{name}{candidate}' in left_names or f'{name}{candidate}' in right_names for name in right_names):
+        candidate = f'{base_suffix}{i}'
+        i += 1
+    return candidate
+
+
+def _right_join_label(
+        name: str,
+        should_rename: bool,
+        right_prefix: str | None,
+        right_suffix: str | None,
+) -> str:
+    if not should_rename:
+        return name
+    if right_prefix is not None:
+        return f'{right_prefix}{name}'
+    return f'{name}{right_suffix or ""}'
 
 
 class LazyBearFrame(IOMixin):
@@ -310,89 +332,89 @@ class LazyBearFrame(IOMixin):
     ) -> 'LazyBearFrame':
         """Join this frame to another ``LazyBearFrame``.
 
-               Parameters:
-                   other:
-                       The right-side ``LazyBearFrame`` to join.
-                   on:
-                       Join keys to use when both frames expose the same key names, or a
-                       mapping of ``{left_column: right_column}`` when key names differ.
-                       Do not combine ``on`` with ``left_on``/``right_on``.
-                   left_on:
-                       Left-side join key or keys. Must be used with ``right_on``.
-                   right_on:
-                       Right-side join key or keys. Must be used with ``left_on``.
-                   how:
-                       Join type. One of ``'inner'``, ``'left'``, ``'right'``, or ``'full'``.
-                   suffix:
-                       Suffix used to rename right-side columns. Ignored when ``prefix`` is
-                       provided. Takes precedence over deprecated ``suffixes``.
-                   prefix:
-                       Prefix used to rename right-side columns. Takes precedence over
-                       ``suffix`` and deprecated ``suffixes``.
-                   suffixes:
-                       Deprecated. Use ``suffix`` or ``prefix`` instead. When supplied and
-                       neither ``prefix`` nor ``suffix`` is supplied, ``suffixes[-1]`` is
-                       used for right-side column renaming.
-                   apply_to_all:
-                       When ``True`` and a ``prefix``/``suffix``/``suffixes`` value is used,
-                       apply it to every right-side column. When ``False``, apply it only to
-                       right-side columns whose names overlap with left-side columns.
+       Parameters:
+           other:
+               The right-side ``LazyBearFrame`` to join.
+           on:
+               Join keys to use when both frames expose the same key names, or a
+               mapping of ``{left_column: right_column}`` when key names differ.
+               Do not combine ``on`` with ``left_on``/``right_on``.
+           left_on:
+               Left-side join key or keys. Must be used with ``right_on``.
+           right_on:
+               Right-side join key or keys. Must be used with ``left_on``.
+           how:
+               Join type. One of ``'inner'``, ``'left'``, ``'right'``, or ``'full'``.
+           suffix:
+               Suffix used to rename right-side columns. Ignored when ``prefix`` is
+               provided. Takes precedence over deprecated ``suffixes``.
+           prefix:
+               Prefix used to rename right-side columns. Takes precedence over
+               ``suffix`` and deprecated ``suffixes``.
+           suffixes:
+               Deprecated. Use ``suffix`` or ``prefix`` instead. When supplied and
+               neither ``prefix`` nor ``suffix`` is supplied, ``suffixes[-1]`` is
+               used for right-side column renaming.
+           apply_to_all:
+               When ``True`` and a ``prefix``/``suffix``/``suffixes`` value is used,
+               apply it to every right-side column. When ``False``, apply it only to
+               right-side columns whose names overlap with left-side columns.
 
-                       If no explicit ``prefix``/``suffix``/``suffixes`` is supplied and
-                       ``duplicate_columns='rename'``, LazyBear renames only overlapping
-                       right-side columns using a generated non-conflicting suffix.
-                   duplicate_columns:
-                       Controls right-side columns that would duplicate left-side labels.
+               If no explicit ``prefix``/``suffix``/``suffixes`` is supplied and
+               ``duplicate_columns='rename'``, LazyBear renames only overlapping
+               right-side columns using a generated non-conflicting suffix.
+           duplicate_columns:
+               Controls right-side columns that would duplicate left-side labels.
 
-                       - ``'rename'``: rename duplicate right-side columns. If no explicit
-                         ``prefix`` or ``suffix`` is supplied, LazyBear generates a useful
-                         non-conflicting suffix such as ``'_right'`` or ``'_right2'``.
-                       - ``'drop'``: omit right-side columns selected for renaming. With
-                         explicit ``prefix``/``suffix`` and ``apply_to_all=True``, this drops
-                         all right-side columns. With ``apply_to_all=False``, this drops only
-                         overlapping right-side columns.
+               - ``'rename'``: rename duplicate right-side columns. If no explicit
+                 ``prefix`` or ``suffix`` is supplied, LazyBear generates a useful
+                 non-conflicting suffix such as ``'_right'`` or ``'_right2'``.
+               - ``'drop'``: omit right-side columns selected for renaming. With
+                 explicit ``prefix``/``suffix`` and ``apply_to_all=True``, this drops
+                 all right-side columns. With ``apply_to_all=False``, this drops only
+                 overlapping right-side columns.
 
-               Notes:
-                   Right-side column naming precedence is:
+       Notes:
+           Right-side column naming precedence is:
 
-                   1. ``prefix``
-                   2. ``suffix``
-                   3. ``suffixes[-1]`` for backward compatibility
-                   4. generated non-conflicting suffix when ``duplicate_columns='rename'``
+           1. ``prefix``
+           2. ``suffix``
+           3. ``suffixes[-1]`` for backward compatibility
+           4. generated non-conflicting suffix when ``duplicate_columns='rename'``
 
-                   Prefix and suffix are not combined. If both are supplied, ``prefix`` wins.
+           Prefix and suffix are not combined. If both are supplied, ``prefix`` wins.
 
-               Returns:
-                   A new ``LazyBearFrame`` containing left columns followed by selected
-                   right columns.
+       Returns:
+           A new ``LazyBearFrame`` containing left columns followed by selected
+           right columns.
 
-               Examples:
-                   Rename all right-side columns with a prefix:
+       Examples:
+           Rename all right-side columns with a prefix:
 
-                   ```python
-                   joined = users.join(orders, on={'id': 'user_id'}, prefix='order_')
-                   ```
+           ```python
+           joined = users.join(orders, on={'id': 'user_id'}, prefix='order_')
+           ```
 
-                   Rename only overlapping right-side columns:
+           Rename only overlapping right-side columns:
 
-                   ```python
-                   joined = users.join(
-                       orders,
-                       on={'id': 'user_id'},
-                       suffix='_order',
-                       apply_to_all=False,
-                   )
-                   ```
+           ```python
+           joined = users.join(
+               orders,
+               on={'id': 'user_id'},
+               suffix='_order',
+               apply_to_all=False,
+           )
+           ```
 
-                   Drop overlapping right-side columns:
+           Drop overlapping right-side columns:
 
-                   ```python
-                   joined = users.join(
-                       orders,
-                       on={'id': 'user_id'},
-                       duplicate_columns='drop',
-                   )
-                   ```
+           ```python
+           joined = users.join(
+               orders,
+               on={'id': 'user_id'},
+               duplicate_columns='drop',
+           )
+           ```
         """
         if not isinstance(other, LazyBearFrame):
             raise TypeError('other must be a LazyBearFrame')
@@ -403,22 +425,6 @@ class LazyBearFrame(IOMixin):
 
         def _as_list(x: str | Sequence[str]) -> list[str]:
             return [x] if isinstance(x, str) else list(x)
-
-        def _dedupe_suffix(base_suffix: str, left_names: set[str], right_names: Sequence[str]) -> str:
-            candidate = base_suffix
-            i = 2
-            while any(
-                    f'{name}{candidate}' in left_names or f'{name}{candidate}' in right_names for name in right_names):
-                candidate = f'{base_suffix}{i}'
-                i += 1
-            return candidate
-
-        def _right_label(name: str, should_rename: bool, right_prefix: str | None, right_suffix: str | None) -> str:
-            if not should_rename:
-                return name
-            if right_prefix is not None:
-                return f'{right_prefix}{name}'
-            return f'{name}{right_suffix or ""}'
 
         if on is not None and (left_on is not None or right_on is not None):
             raise ValueError('specify either on= or left_on=/right_on=, not both')
@@ -452,7 +458,6 @@ class LazyBearFrame(IOMixin):
             j = sa.outerjoin(self._selectable, other._selectable, on_expr, full=True)
 
         # build select list with suffix handling for overlapping names
-
         left_names = set(self.columns)
         right_names = list(other.columns)
         overlap = left_names & set(right_names)
@@ -467,7 +472,7 @@ class LazyBearFrame(IOMixin):
             right_suffix = suffixes[-1]
         elif duplicate_columns == 'rename':
             apply_to_all = False
-            right_suffix = _dedupe_suffix('_right', left_names, right_names)
+            right_suffix = _dedupe_join_suffix('_right', left_names, right_names)
         elif duplicate_columns == 'drop':
             apply_to_all = False
 
@@ -485,7 +490,7 @@ class LazyBearFrame(IOMixin):
             should_rename = apply_to_all or name in overlap
             if should_rename and duplicate_columns == 'drop':
                 continue
-            lbl = _right_label(name, should_rename, right_prefix, right_suffix)
+            lbl = _right_join_label(name, should_rename, right_prefix, right_suffix)
             if lbl in used_labels:
                 err = ValueError(f'Join would create duplicate column label {lbl!r}.')
                 err.add_note('Hint: change prefix/suffix, or set drop_duplicate_columns to True')
@@ -494,6 +499,162 @@ class LazyBearFrame(IOMixin):
             select_list.append(other._selectable.c[name].label(lbl))
 
         sel = sa.select(*select_list).select_from(j)
+        sq = sel.subquery()
+        cols = {c.key: sq.c[c.key] for c in sq.c}
+        out = self._rebuild(sq, cols)
+        out._upstream = [self, other]
+        return out
+
+    def join_where(
+            self,
+            other: 'LazyBearFrame',
+            *predicates: Expr | Iterable[Expr],
+            how: Literal['inner', 'left', 'right'] = 'inner',
+            suffix: str | None = None,
+            prefix: str | None = None,
+            apply_to_all: bool = True,
+            duplicate_columns: Literal['drop', 'rename'] = 'rename',
+    ) -> 'LazyBearFrame':
+        """Join this frame to another frame using arbitrary predicates.
+
+        This mirrors Polars' ``DataFrame.join_where`` API while compiling the
+        predicates into the SQL ``ON`` clause. Multiple predicates are combined
+        with ``AND``. Right-side column names are resolved in predicates after
+        applying the same naming rules used by :meth:`join`.
+
+        Parameters:
+            other:
+                The right-side ``LazyBearFrame`` to join.
+            *predicates:
+                One or more equality or inequality expressions. An iterable of
+                expressions may also be supplied.
+            how:
+                Join type. One of ``'inner'``, ``'left'``, or ``'right'``.
+            suffix:
+                Suffix used to rename right-side columns. Ignored when ``prefix``
+                is provided.
+            prefix:
+                Prefix used to rename right-side columns. Takes precedence over
+                ``suffix``.
+            apply_to_all:
+                When an explicit prefix or suffix is supplied, apply it to every
+                right-side column when ``True`` and only overlapping columns when
+                ``False``.
+            duplicate_columns:
+                Rename or drop selected right-side columns. Dropped columns remain
+                available while resolving the join predicates.
+
+        Examples:
+            Join on an identifier and an inclusive date range, equivalent to
+            ``x.id = y.id AND x.date BETWEEN y.start AND y.end``:
+
+            ```python
+            joined = x.join_where(
+                y,
+                col('id') == col('id_right'),
+                col('date') >= col('start'),
+                col('date') <= col('end'),
+            )
+            ```
+        """
+        if not isinstance(other, LazyBearFrame):
+            raise TypeError('other must be a LazyBearFrame')
+        if not _same_server(self._engine, other._engine):
+            raise ValueError('cannot join frames from different servers')
+        if suffix is not None and not isinstance(suffix, str):
+            raise TypeError('suffix must be a string or None')
+        if prefix is not None and not isinstance(prefix, str):
+            raise TypeError('prefix must be a string or None')
+        if duplicate_columns not in {'drop', 'rename'}:
+            raise ValueError("duplicate_columns must be one of 'drop' or 'rename'")
+
+        join_type = how.lower()
+        if join_type not in {'inner', 'left', 'right'}:
+            raise ValueError("how must be one of 'inner', 'left', 'right'")
+
+        flattened_predicates: list[Expr] = []
+        for predicate in predicates:
+            if isinstance(predicate, Expr):
+                flattened_predicates.append(predicate)
+                continue
+            if isinstance(predicate, (str, bytes)):
+                raise TypeError('join_where() predicates must be Expr objects')
+            try:
+                items = list(predicate)
+            except TypeError as exc:
+                raise TypeError('join_where() predicates must be Expr objects') from exc
+            if not all(isinstance(item, Expr) for item in items):
+                raise TypeError('join_where() predicates must be Expr objects')
+            flattened_predicates.extend(items)
+
+        if not flattened_predicates:
+            raise ValueError('join_where() requires at least one predicate')
+
+        left_names = set(self.columns)
+        right_names = list(other.columns)
+        overlap = left_names & set(right_names)
+        right_prefix = None
+        right_suffix = None
+        if prefix:
+            right_prefix = prefix
+        elif suffix:
+            right_suffix = suffix
+        elif duplicate_columns == 'rename':
+            apply_to_all = False
+            right_suffix = _dedupe_join_suffix('_right', left_names, right_names)
+        else:
+            apply_to_all = False
+
+        # dropped overlapping columns still need unambiguous names, so use the default suffix '_right' if not specified
+        predicate_suffix = right_suffix
+        if duplicate_columns == 'drop' and right_prefix is None and predicate_suffix is None:
+            predicate_suffix = _dedupe_join_suffix('_right', left_names, right_names)
+
+        used_predicate_labels = set(self.columns)
+        right_labels: dict[str, str] = {}
+        right_columns_to_select: list[str] = []
+        for name in right_names:
+            should_rename = apply_to_all or name in overlap
+            label = _right_join_label(name, should_rename, right_prefix, predicate_suffix)
+            if label in used_predicate_labels:
+                raise ValueError(
+                    f'join_where() would create duplicate column label {label!r}; '
+                    'choose a different prefix or suffix'
+                )
+            used_predicate_labels.add(label)
+            right_labels[name] = label
+            if not (should_rename and duplicate_columns == 'drop'):
+                right_columns_to_select.append(name)
+
+        # namespace with left columns (original names) and right columns (new names, after join)
+        predicate_columns = {name: self._selectable.c[name] for name in self.columns}
+        predicate_columns.update({
+            right_labels[name]: other._selectable.c[name]
+            for name in other.columns
+        })
+        predicate_context = LazyBearFrame(self._engine, self._selectable, predicate_columns)
+        on_expr = sa.and_(*[
+            _normalize_predicate(_to_sa(predicate, predicate_context))
+            for predicate in flattened_predicates
+        ])
+
+        if join_type == 'inner':
+            joined = sa.join(self._selectable, other._selectable, on_expr, isouter=False)
+        elif join_type == 'left':
+            joined = sa.join(self._selectable, other._selectable, on_expr, isouter=True)
+        else:
+            joined = sa.join(other._selectable, self._selectable, on_expr, isouter=True)
+
+        select_list: list[sa.ColumnElement[Any]] = [
+            self._selectable.c[name].label(name)
+            for name in self.columns
+        ]
+        select_list.extend(
+            other._selectable.c[name].label(right_labels[name])
+            for name in right_columns_to_select
+        )
+
+        sel = sa.select(*select_list).select_from(joined)
         sq = sel.subquery()
         cols = {c.key: sq.c[c.key] for c in sq.c}
         out = self._rebuild(sq, cols)

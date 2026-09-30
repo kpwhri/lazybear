@@ -1,7 +1,7 @@
 # Joins
 
 LazyBear supports SQL-style joins between two lazy frames. Joins are useful when you have related data in separate
-tables and want to combine them into one result.
+tables and want to combine them into one result. The simple form is `join`. To join with inequalities/date ranges, use [`join_where`](#join-with-equality-and-range-predicates).
 
 ```python
 from lazybear import scan_table, col
@@ -142,6 +142,49 @@ orders.product_id == order_lookup.lookup_product_id
 ```
 
 The first item in `left_on` matches the first item in `right_on`, the second matches the second, and so on.
+
+## Join with equality and range predicates
+
+Use `join_where` when matching requires inequalities or a mix of equality and
+inequality predicates. For example, this is equivalent to SQL
+`ON events.id = ranges.id AND events.date BETWEEN ranges.start AND ranges.end`:
+
+```python
+out_df = (
+    events
+    .join_where(
+        ranges,
+        col('id') == col('id_right'),  # n.b., dupe column names will have `_right` appended
+        col('date') >= col('start'),
+        col('date') <= col('end'),
+        how='inner',
+    )
+    .collect()
+)
+```
+
+Predicates are combined with `AND`. The date boundaries above are inclusive.
+`join_where` supports `inner`, `left`, and `right` joins.
+
+By default, overlapping right-side columns receive a generated suffix such as
+`_right`. Use that renamed column inside the predicate. As with `join`, an
+explicit prefix or suffix applies to every right-side column by default:
+
+```python
+events.join_where(
+    ranges,
+    col('id') == col('id_range'),  # takes suffix `_range` rather that `_right` due to suffix arg being specified
+    col('date') >= col('start'),
+    col('date') <= col('end'),
+    suffix='_range',
+    apply_to_all=False,
+)
+```
+
+Set `duplicate_columns='drop'` to omit selected right-side columns from the
+result. They remain available under their renamed predicate names while the
+join condition is compiled. `join_where` intentionally does not support the
+deprecated `suffixes` argument.
 
 ## Dict form for different key names
 

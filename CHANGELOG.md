@@ -11,6 +11,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - more `join` tests for multiple keys
 - `join` documentation
+- `join_where` function to allow joining with inequalities + tests and doco
 
 ## [0.3.2] - 2026-09-29
 
