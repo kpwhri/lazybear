@@ -2,7 +2,10 @@
 
 ## `LazyBearFrame`
 
-The main object representing a lazy SQL query. It is immutable; every transformation returns a new `LazyBearFrame`. The API is intended to be based off `polars` DataFrames.
+The main object representing a lazy SQL query. It is immutable; every transformation returns a new `LazyBearFrame`. The
+API is intended to be based off `polars` DataFrames. While this is intended to be comparable, it is not intended to be
+feature complete. Rather, the goal is to allow construction of SQL queries using polars syntax to reduce data size
+enough before doing the actual data analysis locally.
 
 ### Properties
 
@@ -38,11 +41,13 @@ Parameters:
 - `**constraints`: Column equality filters, written as keyword arguments.
 
 Examples:
+
 ```python
 from lazybear import col
 
 lf.filter(col('age') >= 30)
 ```
+
 Multiple predicates are combined with `AND`:
 
 ```python
@@ -53,6 +58,7 @@ lf.filter(
 ```
 
 Keyword constraints are shorthand for equality filters:
+
 ```python
 lf.filter(age=41, name='Tellervo')
 ```
@@ -67,6 +73,7 @@ lf.filter(
 ```
 
 Predicates and constraints can also be mixed:
+
 ```python
 lf.filter(
     col('id') > 1,
@@ -98,8 +105,8 @@ lf.filter(
 
 - Limits the number of rocords returned to `n`.
 
-
-#### `join(other, on=None, *, left_on=None, right_on=None, how='inner', suffix=None, prefix=None, apply_to_all=True, duplicate_columns='rename')`
+####
+`join(other, on=None, *, left_on=None, right_on=None, how='inner', suffix=None, prefix=None, apply_to_all=True, duplicate_columns='rename')`
 
 Join this frame with another `LazyBearFrame` using one or more equality keys.
 
@@ -128,8 +135,8 @@ A mapping can also associate differently named keys:
 
 ```python
 users.join(
-  accounts,
-  on={'id': 'user_id'},
+    accounts,
+    on={'id': 'user_id'},
 )
 ```
 
@@ -190,7 +197,8 @@ See the complete [join documentation](join.md).
 
 ---
 
-#### `join_where(other, *predicates, how='inner', suffix=None, prefix=None, apply_to_all=True, duplicate_columns='rename')`
+####
+`join_where(other, *predicates, how='inner', suffix=None, prefix=None, apply_to_all=True, duplicate_columns='rename')`
 
 Join this frame with another `LazyBearFrame` using arbitrary equality or inequality predicates.
 
@@ -244,7 +252,8 @@ col('id') == col('id')
 
 Both expressions resolve to the left-side `id`, producing `left.id = left.id` rather than a comparison between frames.
 
-If an explicit prefix or suffix is supplied, use the resulting names in the predicates. Because explicit naming applies to all right-side columns by default, this example suffixes every right-side reference:
+If an explicit prefix or suffix is supplied, use the resulting names in the predicates. Because explicit naming applies
+to all right-side columns by default, this example suffixes every right-side reference:
 
 ```python
 orders.join_where(
@@ -291,7 +300,6 @@ The result row order is not guaranteed. Call `sort` or `order_by` when determini
 
 See [equality and range-join examples](join.md#join-with-equality-and-range-predicates).
 
-
 #### `group_by(*keys)`
 
 - Groups by one or more columns. Returns a `GroupedLazyBearFrame`.
@@ -304,7 +312,8 @@ A frame representing grouped data, returned by `LazyBearFrame.group_by`.
 
 - Performs aggregations on the grouped data.
 - Parameters:
-    - `aggregations`: Keyword arguments where the key is the output column name and the value is a tuple `(column, function)`.
+    - `aggregations`: Keyword arguments where the key is the output column name and the value is a tuple
+      `(column, function)`.
 - Supported functions: `'count'`, `'sum'`, `'avg'`, `'mean'`, `'min'`, `'max'`.
 
 ```python
@@ -320,7 +329,8 @@ lf.group_by('department').agg(
 #### `collect(limit=None, infer_schema_length=200)`
 
 - Executes the query and returns a `polars.DataFrame`.
-- Some database dialects may apply result cleaning after materialization. For example, Teradata/`teradatasql` string columns have trailing whitespace stripped to account for character datatype padding.
+- Some database dialects may apply result cleaning after materialization. For example, Teradata/`teradatasql` string
+  columns have trailing whitespace stripped to account for character datatype padding.
 
 #### `to_arrow(limit=None)`
 
@@ -329,12 +339,14 @@ lf.group_by('department').agg(
 #### `collect_batches(chunk_size=10_000)`
 
 - Streams the query in batches, yielding `polars.DataFrame` chunks.
-- Some database dialects may apply result cleaning after materialization. For example, Teradata/`teradatasql` string columns have trailing whitespace stripped to account for character datatype padding.
+- Some database dialects may apply result cleaning after materialization. For example, Teradata/`teradatasql` string
+  columns have trailing whitespace stripped to account for character datatype padding.
 
 #### `iter_rows(named=False, chunk_size=10_000)`
 
 - Yields rows as tuples (default) or dictionaries (if `named=True`).
-- Some database dialects may apply result cleaning after materialization. For example, Teradata/`teradatasql` string columns have trailing whitespace stripped to account for character datatype padding.
+- Some database dialects may apply result cleaning after materialization. For example, Teradata/`teradatasql` string
+  columns have trailing whitespace stripped to account for character datatype padding.
 
 #### `explain()`
 
@@ -363,7 +375,9 @@ This has limited testing.
 ### `scan_table(table_name, engine, schema=None, lowercase=True)`
 
 - Creates a `LazyBearFrame` from a database table.
-- **Lowercaseing**: If `True` (default), column names are exposed as lowercase. This is useful for databases that return uppercase column names by default (e.g., Snowflake, Oracle, DB2) to keep code consistent with Polars. Set to `False` to preserve the exact casing from the database.
+- **Lowercaseing**: If `True` (default), column names are exposed as lowercase. This is useful for databases that return
+  uppercase column names by default (e.g., Snowflake, Oracle, DB2) to keep code consistent with Polars. Set to `False`
+  to preserve the exact casing from the database.
 
 ### `scan_sql_query(query, engine, columns=None)`
 
@@ -372,5 +386,6 @@ This has limited testing.
 ### `scan_df(df, engine, table_name=None)`
 
 - Creates a `TempLazyBearFrame` from a local `polars.DataFrame`.
-- **Temp Tables**: The DataFrame is uploaded to a temporary table on the database only when `collect()` or similar materialization methods are called. The table is automatically dropped after the result is fetched.
+- **Temp Tables**: The DataFrame is uploaded to a temporary table on the database only when `collect()` or similar
+  materialization methods are called. The table is automatically dropped after the result is fetched.
 - **Dialect Support**: Beta support for SQLite, PostgreSQL, SQL Server, Oracle, and Teradata.
