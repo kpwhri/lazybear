@@ -14,6 +14,7 @@ from lazybear.deprecated import deprecated_param
 from lazybear.engine import _inline_for_select, _normalize_predicate, _same_server
 from lazybear.expressions import Expr, AliasedExpr
 from lazybear.io import IOMixin
+from lazybear.protocol import LazyBearFrameCompatible
 
 
 def _to_sa(x: Any, lf: 'LazyBearFrame') -> sa.ColumnElement[Any]:
@@ -411,8 +412,10 @@ class LazyBearFrame(IOMixin):
            )
            ```
         """
+        if isinstance(other, LazyBearFrameCompatible):
+            other = other.__as_lazybearframe__()
         if not isinstance(other, LazyBearFrame):
-            raise TypeError('other must be a LazyBearFrame')
+            raise TypeError(f'other must be a LazyBearFrame (got {other.__class__.__name__})')
         if not _same_server(self._engine, other._engine):
             raise ValueError('cannot join frames from different servers')
         if duplicate_columns not in {'drop', 'rename'}:
@@ -552,8 +555,10 @@ class LazyBearFrame(IOMixin):
             )
             ```
         """
+        if isinstance(other, LazyBearFrameCompatible):
+            other = other.__as_lazybearframe__()
         if not isinstance(other, LazyBearFrame):
-            raise TypeError('other must be a LazyBearFrame')
+            raise TypeError(f'other must be a LazyBearFrame (got {other.__class__.__name__})')
         if not _same_server(self._engine, other._engine):
             raise ValueError('cannot join frames from different servers')
         if suffix is not None and not isinstance(suffix, str):

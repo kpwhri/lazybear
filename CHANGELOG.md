@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Added a `LazyBearFrameCompatible` protocol to allow automatic conversion to lazybearframe for otherwise incompatible objects
+
+### Fixed
+
+- If the `other` in a `join` is not `LazyBearFrame`, first check if is `LazyBearFrameCompatible`
+
 ## [0.4.0] - 2026-09-30
 
 ### Added

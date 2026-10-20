@@ -225,6 +225,8 @@ result = (
 - Currently offers _beta_ support for sqlite, PostgreSQL, SQL Server (MSSQL), Oracle, and Teradata. A warning is issued
   for other dialects.
 - For certain dialects, will attempt bulk insert to speed up processing
+- To enable another datatype to be joinable, implement the `LazyBearFrameCompatible` by adding a
+  `__as_lazybearframe__()` which returns a compatible `LazyBearFrame`
 
 #### Exporting Data
 
@@ -306,6 +308,7 @@ Notes:
 | `suffix`              | `None`     | Suffix for right-side renamed columns. Used only when `prefix` is not supplied.                                                                           |
 | `apply_to_all`        | `True`     | When using `prefix` or `suffix`, apply it to every right-side column. Set to `False` to rename only right-side columns that overlap with left-side names. |
 | `duplicate_columns`   | `'rename'` | Use `'rename'` to rename overlapping right-side columns, or `'drop'` to omit them.                                                                        |
+
 Right-side naming precedence is:
 
 1. `prefix`
