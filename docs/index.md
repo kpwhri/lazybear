@@ -9,7 +9,10 @@ The purpose of this library is to provide lazy, polars-like access to a single s
 
 - [Quickstart](index.md#quickstart)
 - [API Reference](api.md)
-  - [Joins](join.md)
+  - [LazyBearFrame API](api/lazybearframe.md)
+  - [Joins](api/joins.md)
+  - [Groups and Aggregation](api/grouping.md)
+  - [Execution and Output](api/execution.md)
 - [Expressions & Namespaces](expressions.md)
 
 ## Installation
@@ -22,18 +25,20 @@ pip install lazybear-polars
 
 ```python
 import sqlalchemy as sa
-from lazybear import scan_table, col
+import lazybear as lb
 
 # Create a sqlalchemy engine
 engine = sa.create_engine('sqlite:///:memory:')
 
 # Scan a table lazily
-lf = scan_table('users', engine)
+lf = lb.scan_table('users', engine)
 
 # Chain transformations and materialize
 df = (
     lf
-    .filter(col('age') >= 30)
+    .filter(
+      lb.col('age') >= 30
+    )
     .select('id', 'name')
     .collect()
 )

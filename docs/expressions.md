@@ -8,9 +8,9 @@ LazyBear expressions (`Expr`) are used to define transformations, filters, and a
 References a column by name.
 
 ```python
-from lazybear import col
+import lazybear as lb
 
-lf.select(col('age'))
+lf.select(lb.col('age'))
 # or simply
 lf.select('age')
 ```
@@ -19,10 +19,10 @@ lf.select('age')
 Creates a literal value expression.
 
 ```python
-from lazybear import lit
+import lazybear as lb
 
 lf.with_columns(
-    status=lit('active')
+    status=lb.lit('active')
 )
 ```
 
@@ -31,11 +31,11 @@ lf.with_columns(
 `coalesce` returns the first non-null value. Literal values can be directly included as 'defaults'.
 
 ```python
-from lazybear import col, coalesce
+import lazybear as lb
 
 lf.with_columns(
-        coalesce(col('nickname'), col('first_name'), 'unknown').alias('display_name'),
-        coalesce(col('score'), 0).alias('score_filled'),
+        lb.coalesce(lb.col('nickname'), lb.col('first_name'), 'unknown').alias('display_name'),
+        lb.coalesce(lb.col('score'), 0).alias('score_filled'),
 )
 ```
 
@@ -50,7 +50,7 @@ Use it to replace nulls or choose the first available value across columns.
 
 ```python
 lf.filter(
-    coalesce(col('score'), col('bonus'), 0) > 75
+    lb.coalesce(lb.col('score'), lb.col('bonus'), 0) > 75
 )
 ```
 
@@ -60,7 +60,7 @@ lf.filter(
 Standard Python comparison operators are supported: `==`, `!=`, `>`, `>=`, `<`, `<=`.
 
 ```python
-lf.filter(col('age') >= 18)
+lf.filter(lb.col('age') >= 18)
 ```
 
 ### Arithmetic Operators
@@ -68,7 +68,7 @@ Standard arithmetic operators: `+`, `-`, `*`, `/`, `%`.
 
 ```python
 lf.with_columns(
-    age_next_year=col('age') + 1
+    age_next_year=lb.col('age') + 1
 )
 ```
 
@@ -77,7 +77,7 @@ Use `&` for AND, `|` for OR.
 
 ```python
 lf.filter(
-    (col('age') > 30) & (col('name') == 'Ahti')
+    (lb.col('age') > 30) & (lb.col('name') == 'Ahti')
 )
 ```
 
@@ -85,7 +85,7 @@ lf.filter(
 Check for null values.
 
 ```python
-lf.filter(col('amount').is_not_null())
+lf.filter(lb.col('amount').is_not_null())
 ```
 
 ### `is_in(other)`
@@ -96,16 +96,18 @@ Checks if a value is present in a list, Polars Series, or another `LazyBearFrame
 lf.filter(col('id').is_in([1, 2, 3]))
 
 # With a subquery
-young_users = lf.filter(col('age') < 30).select('id')
-lf.filter(col('id').is_in(young_users))
+young_users = lf.filter(lb.col('age') < 30).select('id')
+lf.filter(lb.col('id').is_in(young_users))
 ```
+
+**Warning**: `is_in` will create a where clause, and your server may have limits on how many elements can be included. To get around this, consider using `scan_df` to create a temp table or apply in batches.
 
 ### `alias(name)`
 Renames an expression.
 
 ```python
 lf.select(
-    (col('age') * 2).alias('double_age')
+    (lb.col('age') * 2).alias('double_age')
 )
 ```
 
@@ -121,17 +123,17 @@ Checks if the string contains a substring. Case sensitivity depends on the under
 
 ```python
 # Literal match
-lf.filter(col('name').str.contains('hti'))
+lf.filter(lb.col('name').str.contains('hti'))
 
 # SQL LIKE match
-lf.filter(col('name').str.contains('%hti%', literal=False))
+lf.filter(lb.col('name').str.contains('%hti%', literal=False))
 ```
 
 ### `contains_any(patterns, literal=True)`
 Checks if the string contains any of the provided patterns.
 
 ```python
-lf.filter(col('name').str.contains_any(['Ah', 'Ka']))
+lf.filter(lb.col('name').str.contains_any(['Ah', 'Ka']))
 ```
 
 ### `starts_with(prefix, ascii_case_insensitive=False)`
@@ -140,17 +142,17 @@ Checks if the string starts with the given prefix.
 - `ascii_case_insensitive`: If `True`, performs a case-insensitive match by applying `UPPER()` to both sides. Note this only handles ASCII characters correctly in most databases.
 
 ```python
-lf.filter(col('name').str.starts_with('A'))
+lf.filter(lb.col('name').str.starts_with('A'))
 
 # Case-insensitive
-lf.filter(col('name').str.starts_with('a', ascii_case_insensitive=True))
+lf.filter(lb.col('name').str.starts_with('a', ascii_case_insensitive=True))
 ```
 
 ### `starts_with_any(prefixes)`
 Checks if the string starts with any of the provided prefixes.
 
 ```python
-lf.filter(col('name').str.starts_with_any(['A', 'K']))
+lf.filter(lb.col('name').str.starts_with_any(['A', 'K']))
 ```
 
 ## Callable Proxy (`.startswith`)
@@ -158,7 +160,7 @@ lf.filter(col('name').str.starts_with_any(['A', 'K']))
 For convenience, `col('x').startswith('a')` is available as a shortcut for `col('x').str.starts_with('a')`.
 
 ```python
-lf.filter(col('name').startswith('A'))
+lf.filter(lb.col('name').startswith('A'))
 ```
 
 ## Examples from Tests
@@ -168,7 +170,7 @@ Combining multiple conditions:
 
 ```python
 # from tests/test_lazybear.py
-users.filter((col('age') > 30) & (col('age') < 60))
+users.filter((lb.col('age') > 30) & (lb.col('age') < 60))
 ```
 
 ### String Operations
@@ -176,15 +178,20 @@ Using `.str` for filtering:
 
 ```python
 # from tests/test_lazybear.py
-users.filter(col('name').str.contains('a', literal=True))
-users.filter(col('name').str.starts_with_any(['a', 'k']))
+users.filter(lb.col('name').str.contains('a', literal=True))
+users.filter(lb.col('name').str.starts_with_any(['a', 'k']))
 ```
 
 ### Subqueries
 Using `is_in` with another `LazyBearFrame`:
 
 ```python
-# from tests/test_lazybear.py
-young_ids = scan_table('users', engine).filter(col('age') < 30).select('id')
-users.filter(col('id').is_in(young_ids))
+import lazybear as lb
+
+young_ids = lb.scan_table('users', engine).filter(
+    lb.col('age') < 30,
+).select('id')
+users.filter(
+    lb.col('id').is_in(young_ids)
+)
 ```

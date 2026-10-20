@@ -1,391 +1,66 @@
-# API Reference
+# API reference
 
-## `LazyBearFrame`
+`lazybear` provides a polars-inspired lazy API for building sql queries with sqlalchemy-backed execution.
 
-The main object representing a lazy SQL query. It is immutable; every transformation returns a new `LazyBearFrame`. The
-API is intended to be based off `polars` DataFrames. While this is intended to be comparable, it is not intended to be
-feature complete. Rather, the goal is to allow construction of SQL queries using polars syntax to reduce data size
-enough before doing the actual data analysis locally.
+The main object is `LazyBearFrame`. It represents a lazy sql query and is usually created with `scan_table`,
+`scan_sql_query`, or `scan_df`.
 
-### Properties
+lazybear is intended to feel familiar to polars users, but it is not intended to be feature complete. The goal is to
+push filtering, projection, joins, grouping, and limiting into the database so less data needs to be collected locally
+for analysis.
 
-#### `columns`
+## Contents
 
-- Returns: `list[str]`
-- A list of column names in the current frame.
+- [Creating frames](api/scanning.md)
+    - [`scan_table`](api/scanning.md#scan_tabletable_name-engine-schemanone-lowercasetrue)
+    - [`scan_sql_query`](api/scanning.md#scan_sql_queryquery-engine-columnsnone)
+    - [`scan_df`](api/scanning.md#scan_dfdf-engine-table_namenone)
+- [`LazyBearFrame`](api/lazybearframe.md)
+    - [Properties](api/lazybearframe.md#properties)
+    - [`select`](api/lazybearframe.md#selectitems)
+    - [`filter`](api/lazybearframe.md#filterpredicates-constraints)
+    - [`with_columns`](api/lazybearframe.md#with_columnsexprs-named)
+    - [`drop`](api/lazybearframe.md#dropcolumns-stricttrue)
+    - [`sort`](api/lazybearframe.md#sortby-more_by-descendingfalse)
+    - [`order_by`](api/lazybearframe.md#order_bykeys)
+    - [`limit`](api/lazybearframe.md#limitn)
+- [Joins](api/joins.md)
+    - [
+      `join`](api/joins.md#joinother-onnone--left_onnone-right_onnone-howinner-suffixnone-prefixnone-apply_to_alltrue-duplicate_columnsrename)
+    - [
+      `join_where`](api/joins.md#join_whereother-predicates-howinner-suffixnone-prefixnone-apply_to_alltrue-duplicate_columnsrename)
+- [Grouping and aggregation](api/grouping.md)
+    - [`group_by`](api/grouping.md#group_bykeys)
+    - [`GroupedLazyBearFrame.agg`](api/grouping.md#aggaggregations)
+- [Execution and output](api/execution.md)
+    - [`collect`](api/execution.md#collectlimitnone-infer_schema_length200)
+    - [`collect_batches`](api/execution.md#collect_batcheschunk_size10_000)
+    - [`iter_rows`](api/execution.md#iter_rowsnamedfalse-chunk_size10_000)
+    - [`explain`](api/execution.md#explain)
+    - [`to_select`](api/execution.md#to_select)
+    - [`write_parquet`](api/execution.md#write_parquetfile-chunk_sizenone-start_index0-kwargs)
+    - [`write_csv`](api/execution.md#write_csvfile-chunk_sizenone-kwargs)
 
-#### `engine`
-
-- Returns: `sqlalchemy.Engine`
-- The SQLAlchemy engine this frame is bound to.
-
-### Transformations
-
-#### `select(*items)`
-
-- Projects columns or expressions.
-- Parameters:
-    - `items`: Column names, tuples `(alias, expr)`, or `AliasedExpr`.
-
-#### `filter(*predicates, **constraints)`
-
-Filter rows using one or more boolean expressions and/or equality constraints.
-
-- Positional predicates are combined with `AND`.
-- Keyword constraints are interpreted as equality checks on column names.
-- Use `lb.col(...)` expressions instead of `polars.col(...)` / `pl.col(...)`.
-
-Parameters:
-
-- `*predicates`: One or more LazyBear boolean expressions.
-- `**constraints`: Column equality filters, written as keyword arguments.
-
-Examples:
-
-```python
-from lazybear import col
-
-lf.filter(col('age') >= 30)
-```
-
-Multiple predicates are combined with `AND`:
+## Quick example
 
 ```python
-lf.filter(
-    col('age') >= 30,
-    col('name') != 'Ukko',
+from lazybear import col, scan_table
+
+users = scan_table('users', eng)
+
+result = (
+    users
+    .filter(col('age') >= 30)
+    .select('id', 'name', 'age')
+    .sort('age', descending=True)
+    .collect()
 )
 ```
 
-Keyword constraints are shorthand for equality filters:
-
-```python
-lf.filter(age=41, name='Tellervo')
-```
-
-This is equivalent to:
-
-```python
-lf.filter(
-    col('age') == 41,
-    col('name') == 'Tellervo',
-)
-```
-
-Predicates and constraints can also be mixed:
-
-```python
-lf.filter(
-    col('id') > 1,
-    age=41,
-)
-```
-
-#### `with_columns(*exprs, **named)`
-
-- Adds or replaces columns.
-- Parameters:
-    - `exprs`: Positional expressions.
-    - `named`: Keyword arguments for aliased expressions.
-
-#### `sort(by, *more_by, descending=False)`
-
-- Sorts the frame. Note that string sorting case sensitivity depends on the underlying database collation.
-- Parameters:
-    - `by`: Column name or expression to sort by.
-    - `descending`: Boolean or sequence of booleans for sort direction.
-
-#### `order_by(*keys)`
-
-- SQLAlchemy-style ordering.
-- Parameters:
-    - `keys`: Column names (prefix with `-` for descending) or expressions.
-
-#### `limit(n)`
-
-- Limits the number of rocords returned to `n`.
-
-####
-`join(other, on=None, *, left_on=None, right_on=None, how='inner', suffix=None, prefix=None, apply_to_all=True, duplicate_columns='rename')`
-
-Join this frame with another `LazyBearFrame` using one or more equality keys.
-
-Both frames must use the same database server.
-
-**Specifying join keys**
-
-Use `on` when the key names are the same:
-
-```python
-users.join(accounts, on='user_id')
-users.join(accounts, on=['user_id', 'region_id'])
-```
-
-Use `left_on` and `right_on` when the key names differ:
-
-```python
-users.join(
-    accounts,
-    left_on='id',
-    right_on='user_id',
-)
-```
-
-A mapping can also associate differently named keys:
-
-```python
-users.join(
-    accounts,
-    on={'id': 'user_id'},
-)
-```
-
-Do not combine `on` with `left_on` or `right_on`.
-
-**Join strategies**
-
-`how` supports:
-
-- `'inner'`: keep matching rows only.
-- `'left'`: keep every left row.
-- `'right'`: keep every right row.
-- `'full'`: keep rows from both sides.
-
-**Right-column naming**
-
-When right-side column names overlap with left-side names:
-
-- `prefix` adds a prefix to right-side columns.
-- `suffix` adds a suffix to right-side columns.
-- `prefix` takes precedence if both are supplied.
-- An explicit prefix or suffix applies to every right-side column by default.
-- Set `apply_to_all=False` to rename only overlapping columns.
-- Without an explicit prefix or suffix, overlapping columns receive a generated suffix such as `_right` or `_right2`.
-
-For example:
-
-```python
-users.join(orders, on={'id': 'user_id'}, prefix='order_')
-```
-
-produces right-side names such as `order_id`, `order_user_id`, and `order_amount`.
-
-To rename only overlapping columns:
-
-```python
-users.join(
-    orders,
-    on={'id': 'user_id'},
-    suffix='_order',
-    apply_to_all=False,
-)
-```
-
-Set `duplicate_columns='drop'` to omit right-side columns that would otherwise be renamed:
-
-```python
-users.join(
-    orders,
-    on={'id': 'user_id'},
-    duplicate_columns='drop',
-)
-```
-
-When the same key name is used on both sides, such as `on='id'`, the duplicate right key is omitted automatically.
-
-See the complete [join documentation](join.md).
-
----
-
-####
-`join_where(other, *predicates, how='inner', suffix=None, prefix=None, apply_to_all=True, duplicate_columns='rename')`
-
-Join this frame with another `LazyBearFrame` using arbitrary equality or inequality predicates.
-
-This is useful for non-equi joins, including effective-date and interval matching:
-
-```python
-orders.join_where(
-    prices,
-    col('product_id') == col('product_id_right'),
-    col('order_date') >= col('valid_from'),
-    col('order_date') <= col('valid_to'),
-)
-```
-
-This is equivalent to:
-
-```sql
-ON orders.product_id = prices.product_id
-AND orders.order_date >= prices.valid_from
-AND orders.order_date <= prices.valid_to
-```
-
-Multiple predicates are combined with `AND`. To express alternatives within one predicate, combine expressions with `|`.
-
-**Join strategies**
-
-`how` supports:
-
-- `'inner'`: keep matching rows only.
-- `'left'`: keep every left row.
-- `'right'`: keep every right row.
-
-A full join is not supported by `join_where`.
-
-**Referencing right-side columns**
-
-Predicates use the right-column names produced by the prefix and suffix rules.
-
-When a column exists on both sides, the right-side reference receives a generated suffix by default:
-
-```python
-col('id') == col('id_right')
-```
-
-**Do not write:**
-
-```python
-# WRONG!
-col('id') == col('id')
-```
-
-Both expressions resolve to the left-side `id`, producing `left.id = left.id` rather than a comparison between frames.
-
-If an explicit prefix or suffix is supplied, use the resulting names in the predicates. Because explicit naming applies
-to all right-side columns by default, this example suffixes every right-side reference:
-
-```python
-orders.join_where(
-    prices,
-    col('product_id') == col('product_id_price'),
-    col('order_date') >= col('valid_from_price'),
-    col('order_date') <= col('valid_to_price'),
-    suffix='_price',  # by default, suffix applies to all columns
-)
-```
-
-To rename only overlapping right-side columns:
-
-```python
-orders.join_where(
-    prices,
-    col('product_id') == col('product_id_price'),
-    col('order_date') >= col('valid_from'),
-    col('order_date') <= col('valid_to'),
-    suffix='_price',
-    apply_to_all=False,
-)
-```
-
-`prefix` takes precedence over `suffix` when both are supplied.
-
-**Dropping duplicate columns**
-
-Set `duplicate_columns='drop'` to omit selected right-side columns from the result:
-
-```python
-orders.join_where(
-    prices,
-    col('product_id') == col('product_id_right'),
-    col('order_date') >= col('valid_from'),
-    col('order_date') <= col('valid_to'),
-    duplicate_columns='drop',
-)
-```
-
-Dropped right-side columns remain available under their renamed names while the join predicates are evaluated.
-
-The result row order is not guaranteed. Call `sort` or `order_by` when deterministic ordering is required.
-
-See [equality and range-join examples](join.md#join-with-equality-and-range-predicates).
-
-#### `group_by(*keys)`
-
-- Groups by one or more columns. Returns a `GroupedLazyBearFrame`.
-
-## `GroupedLazyBearFrame`
-
-A frame representing grouped data, returned by `LazyBearFrame.group_by`.
-
-### `agg(**aggregations)`
-
-- Performs aggregations on the grouped data.
-- Parameters:
-    - `aggregations`: Keyword arguments where the key is the output column name and the value is a tuple
-      `(column, function)`.
-- Supported functions: `'count'`, `'sum'`, `'avg'`, `'mean'`, `'min'`, `'max'`.
-
-```python
-lf.group_by('department').agg(
-    total_salary=('salary', 'sum'),
-    avg_age=(col('age'), 'mean'),
-    employee_count=('id', 'count')
-)
-```
-
-### Execution & Materialization
-
-#### `collect(limit=None, infer_schema_length=200)`
-
-- Executes the query and returns a `polars.DataFrame`.
-- Some database dialects may apply result cleaning after materialization. For example, Teradata/`teradatasql` string
-  columns have trailing whitespace stripped to account for character datatype padding.
-
-#### `to_arrow(limit=None)`
-
-- Executes the query and returns a `pyarrow.Table`.
-
-#### `collect_batches(chunk_size=10_000)`
-
-- Streams the query in batches, yielding `polars.DataFrame` chunks.
-- Some database dialects may apply result cleaning after materialization. For example, Teradata/`teradatasql` string
-  columns have trailing whitespace stripped to account for character datatype padding.
-
-#### `iter_rows(named=False, chunk_size=10_000)`
-
-- Yields rows as tuples (default) or dictionaries (if `named=True`).
-- Some database dialects may apply result cleaning after materialization. For example, Teradata/`teradatasql` string
-  columns have trailing whitespace stripped to account for character datatype padding.
-
-#### `explain()`
-
-- Returns the SQL query as a string.
-
-### I/O Helpers
-
-#### `write_parquet(file, chunk_size=None, start_index=0, **kwargs)`
-
-- Writes results to Parquet. If `chunk_size` is set, writes multiple files.
-
-#### `write_csv(file, chunk_size=None, **kwargs)`
-
-- Writes results to a CSV file.
-
-### Advanced
-
-#### `to_select()`
-
-- Returns the underlying SQLAlchemy `Select` object.
-
-## Scanning Functions: Create Temporary Tables on the Server
-
-This has limited testing.
-
-### `scan_table(table_name, engine, schema=None, lowercase=True)`
-
-- Creates a `LazyBearFrame` from a database table.
-- **Lowercaseing**: If `True` (default), column names are exposed as lowercase. This is useful for databases that return
-  uppercase column names by default (e.g., Snowflake, Oracle, DB2) to keep code consistent with Polars. Set to `False`
-  to preserve the exact casing from the database.
-
-### `scan_sql_query(query, engine, columns=None)`
-
-- Creates a `LazyBearFrame` from a raw SQL SELECT query.
-
-### `scan_df(df, engine, table_name=None)`
-
-- Creates a `TempLazyBearFrame` from a local `polars.DataFrame`.
-- **Temp Tables**: The DataFrame is uploaded to a temporary table on the database only when `collect()` or similar
-  materialization methods are called. The table is automatically dropped after the result is fetched.
-- **Dialect Support**: Beta support for SQLite, PostgreSQL, SQL Server, Oracle, and Teradata.
+## Notes
+
+- Use `lazybear.col`, not `polars.col` or `pl.col`, when building lazybear expressions.
+- Transformations are immutable. Methods return new `LazyBearFrame` objects.
+- Query execution happens only when calling methods such as `collect`, `collect_batches`, `iter_rows`, or writer
+  methods.
+- sql behavior can vary by database dialect, especially around string collation, date handling, and temporary tables.
