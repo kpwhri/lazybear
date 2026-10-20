@@ -7,9 +7,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-20
+
 ### Added
 
-- Added a `LazyBearFrameCompatible` protocol to allow automatic conversion to lazybearframe for otherwise incompatible objects
+- Added a `LazyBearFrameCompatible` protocol to allow automatic conversion to lazybearframe for otherwise incompatible
+  objects
 - Expanded `filter` to be more polars compatible (e.g., multiple predicates, addition of constraints)
 - Expanded and improved documentation
 - `when`-`then`-`otherwise` + tests + doco
@@ -93,7 +96,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Separated out as a distinct repo
 
-[unreleased]: https://github.com/kpwhri/lazybear/compare/v0.4.0..HEAD
+[unreleased]: https://github.com/kpwhri/lazybear/compare/v0.5.0..HEAD
+
+[0.5.0]: https://github.com/kpwhri/lazybear/compare/v0.4.0..v0.5.0
 
 [0.4.0]: https://github.com/kpwhri/lazybear/compare/v0.3.2..v0.4.0
 
