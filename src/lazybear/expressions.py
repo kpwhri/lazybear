@@ -179,3 +179,70 @@ def _to_sa(x: Any, lf: 'LazyBearFrame') -> sa.ColumnElement[Any]:
     if isinstance(x, sa.ColumnElement):
         return x
     return sa.literal(x)
+
+
+class _When:
+    """A pending WHEN clause, which needs a THEN value."""
+
+    def __init__(self, predicate: Expr, branches: tuple[tuple[Expr, Any], ...] = ()):
+        self._predicate = predicate
+        self._branches = branches
+
+    def then(self, value: Any) -> '_WhenThen':
+        return _WhenThen((*self._branches, (self._predicate, value)))
+
+
+class _WhenThen(Expr):
+    """A CASE expression supporting additional WHENs or ELSE."""
+
+    def __init__(self, branches: tuple[tuple[Expr, Any], ...]):
+        self._branches = branches
+        super().__init__(lambda lf: self._case(lf, None))
+
+    def _case(self, lf: 'LazyBearFrame', default: Any) -> sa.ColumnElement[Any]:
+        return sa.case(
+            *(
+                (predicate.to_sa(lf), _to_sa(value, lf))
+                for predicate, value in self._branches
+            ),
+            else_=_to_sa(default, lf),
+        )
+
+    def when(self, *predicates: Any, **constraints: Any) -> _When:
+        return _When(
+            _when_predicate(*predicates, **constraints),
+            self._branches,
+        )
+
+    def otherwise(self, value: Any) -> Expr:
+        return Expr(lambda lf: self._case(lf, value))
+
+
+def _when_predicate(*predicates: Any, **constraints: Any) -> Expr:
+    if not predicates and not constraints:
+        raise ValueError('when() requires a predicate or keyword constraint')
+
+    def _compile(lf: 'LazyBearFrame') -> sa.ColumnElement[Any]:
+        checks = [
+            _to_sa(col(p) if isinstance(p, str) else p, lf)
+            for p in predicates
+        ]
+
+        for name, value in constraints.items():
+            column = lf._resolve_column(name)
+            checks.append(
+                column.is_(None)
+                if value is None
+                else column == _to_sa(value, lf)
+            )
+
+        return sa.and_(*checks)
+
+    return Expr(_compile)
+
+
+def when(*predicates: Any, **constraints: Any) -> _When:
+    """Build a lazy SQL CASE expression, like polars.when()."""
+    return _When(
+        _when_predicate(*predicates, **constraints)
+    )
