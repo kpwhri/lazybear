@@ -2,7 +2,7 @@
 
 ## `LazyBearFrame`
 
-The main object representing a lazy SQL query. It is immutable; every transformation returns a new `LazyBearFrame`.
+The main object representing a lazy SQL query. It is immutable; every transformation returns a new `LazyBearFrame`. The API is intended to be based off `polars` DataFrames.
 
 ### Properties
 
@@ -24,11 +24,55 @@ The main object representing a lazy SQL query. It is immutable; every transforma
 - Parameters:
     - `items`: Column names, tuples `(alias, expr)`, or `AliasedExpr`.
 
-#### `filter(predicate)`
+#### `filter(*predicates, **constraints)`
 
-- Filters rows based on a boolean expression.
-- Parameters:
-    - `predicate`: An `Expr` or boolean condition.
+Filter rows using one or more boolean expressions and/or equality constraints.
+
+- Positional predicates are combined with `AND`.
+- Keyword constraints are interpreted as equality checks on column names.
+- Use `lb.col(...)` expressions instead of `polars.col(...)` / `pl.col(...)`.
+
+Parameters:
+
+- `*predicates`: One or more LazyBear boolean expressions.
+- `**constraints`: Column equality filters, written as keyword arguments.
+
+Examples:
+```python
+from lazybear import col
+
+lf.filter(col('age') >= 30)
+```
+Multiple predicates are combined with `AND`:
+
+```python
+lf.filter(
+    col('age') >= 30,
+    col('name') != 'Ukko',
+)
+```
+
+Keyword constraints are shorthand for equality filters:
+```python
+lf.filter(age=41, name='Tellervo')
+```
+
+This is equivalent to:
+
+```python
+lf.filter(
+    col('age') == 41,
+    col('name') == 'Tellervo',
+)
+```
+
+Predicates and constraints can also be mixed:
+```python
+lf.filter(
+    col('id') > 1,
+    age=41,
+)
+```
 
 #### `with_columns(*exprs, **named)`
 

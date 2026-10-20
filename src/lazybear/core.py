@@ -199,12 +199,44 @@ class LazyBearFrame(IOMixin):
     def _rebuild(self, selectable: sa.sql.Selectable, columns: Mapping[str, sa.ColumnElement[Any]]) -> 'LazyBearFrame':
         return LazyBearFrame(self._engine, selectable, columns, self._order_keys, self._limit, [self])
 
-    def filter(self, predicate: Any) -> 'LazyBearFrame':
-        """Emulate polars filter, but must use `col` rather than `pl.col`"""
-        where_expr = _normalize_predicate(_to_sa(predicate, self))
+    def filter(self, *predicates: Any, **constraints: Any) -> 'LazyBearFrame':
+        """Filter rows using SQL predicates and equality constraints.
+
+        Positional predicates are combined with ``AND``. Keyword constraints are
+        interpreted as equality filters on column names, similar to Polars:
+
+        ```python
+        lf.filter(col('x') > 1, col('y').is_not_null(), foo=2, ham='b')
+        ```
+
+        Use ``lazybear.col`` rather than ``polars.col`` / ``pl.col`` for expression
+        predicates.
+        """
+        flattened_predicates: list[Any] = []
+        for predicate in predicates:
+            if isinstance(predicate, (list, tuple, set)):
+                flattened_predicates.extend(predicate)
+            else:
+                flattened_predicates.append(predicate)
+
+        where_parts = [
+            _normalize_predicate(_to_sa(predicate, self))
+            for predicate in flattened_predicates
+        ]
+
+        for name, value in constraints.items():
+            column = self._resolve_column(name)
+            where_parts.append(column == value)
+
+        if not where_parts:
+            return self
+
+        where_expr = sa.and_(*where_parts)
+
         # build a select that preserves current columns without introducing an extra nesting level
         base_cols = [self._selectable.c[name].label(name) for name in self.columns]
         sel = sa.select(*base_cols).select_from(self._selectable).where(where_expr)
+
         # rebuild column namespace from the subquery
         sq = sel.subquery()
         cols = {c.key: sq.c[c.key] for c in sq.c}

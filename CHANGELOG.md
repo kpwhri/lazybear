@@ -10,6 +10,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Added a `LazyBearFrameCompatible` protocol to allow automatic conversion to lazybearframe for otherwise incompatible objects
+- Expanded `filter` to be more polars compatible (e.g., multiple predicates, addition of constraints)
 
 ### Fixed
 
