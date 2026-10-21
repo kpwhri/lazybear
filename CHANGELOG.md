@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `calc_age` + tests and doco as a temporal expression
+
 ## [0.5.0] - 2026-10-20
 
 ### Added
