@@ -31,10 +31,10 @@ def test_collect_iter_early_close(sqlite_engine):
             chunk = next(batches)
             assert chunk.shape[0] == 2
 
-            # Connection should still be held by the generator.
+            # connection should still be held by the generator
             before_close = len(checkins)
 
-        # Exiting closing() should return the connection to the pool.
+        # closing() should return the connection to the pool
         assert len(checkins) == before_close + 1
     finally:
         event.remove(sqlite_engine.pool, 'checkin', on_checkin)
@@ -80,3 +80,50 @@ def test_temp_table_sqlite_early_close(sqlite_engine, users_df):
 
     finally:
         event.remove(sqlite_engine, 'checkin', on_checkin)
+
+
+def test_temp_table_sqlite_early_close2(sqlite_engine, users_df):
+    temp_df = lb.scan_df(users_df, sqlite_engine, table_name='heroes')
+    temp_df = temp_df.filter(lb.col('age') >= 30).select('name')
+
+    created_connections = []
+    table_exists_on_checkin = []
+
+    def table_exists(dbapi_conn):
+        return dbapi_conn.execute(f"""
+            SELECT 1 
+            FROM sqlite_temp_master
+            WHERE type = 'table' AND name = '{temp_df._table_name}'
+        """).fetchone() is not None
+
+    def on_execute(conn, cursor, statement, parameters, context, executemany):
+        if statement.strip().upper().startswith('CREATE TEMPORARY TABLE') and temp_df._table_name in statement:
+            created_connections.append(cursor.connection)
+
+    def on_checkin(dbapi_conn, connection_record):
+        if created_connections and dbapi_conn is created_connections[0]:
+            table_exists_on_checkin.append(table_exists(dbapi_conn))
+
+    event.listen(sqlite_engine, 'after_cursor_execute', on_execute)
+    event.listen(sqlite_engine.pool, 'checkin', on_checkin)
+
+    try:
+        with closing(temp_df.collect_batches(chunk_size=1)) as batches:
+            chunk = next(batches)
+            assert chunk.height == 1
+
+            # verify temp table create
+            assert len(created_connections) == 1
+
+            # verify temp table still exists
+            assert table_exists(created_connections[0])
+
+        # verify connection returned to pool
+        assert len(table_exists_on_checkin) == 1
+
+        # verify temp table dropped
+        assert table_exists_on_checkin[0] is False
+
+    finally:
+        event.remove(sqlite_engine, 'after_cursor_execute', on_execute)
+        event.remove(sqlite_engine.pool, 'checkin', on_checkin)
