@@ -10,6 +10,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `calc_age` + tests and doco as a temporal expression
+- `write_parquet_dir` function to write directly to parquet
+- For `collect_batches`, now specifying the `yield_per` option, equaling the requested `chunk_size`
 
 ## [0.5.0] - 2026-10-20
 

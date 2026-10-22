@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Iterator
-
-import polars as pl
+from pathlib import Path
 
 
 class IOMixin:
@@ -27,19 +25,60 @@ class IOMixin:
         return pa.table(columns)
 
     def write_parquet(self, file, chunk_size: int | bool | None = None, start_index: int = 0, **kwargs):
-        """Write results to Parquet.
+        """Write results to parquet.
 
-        By default materializes the entire result and writes a single Parquet file.
+        By default materializes the entire result and writes a single parquet file.
         If ``chunk_size`` is provided, the query is streamed in chunks and written to
-        multiple Parquet part files sharing a common prefix.
-        """
-        from pathlib import Path
+        multiple parquet part files sharing a common prefix.
 
-        if chunk_size is None:
+        Args:
+            file: Filepath where parquet file will be written. Becomes a prefix for multiple files if
+                chunk_size is specified.
+            chunk_size: Number of rows/items to include in each batch. If ``True``,
+                defaults to ``10_000``. Must be a positive integer.
+            start_index: Initial numeric index used in generated file names. Must be
+                a non-negative integer.
+            **kwargs: Additional keyword arguments passed to each batch's
+                ``write_parquet()`` method.
+        """
+        if chunk_size is None or chunk_size is False:
             df = self.collect()  # type: ignore[attr-defined]
             df.write_parquet(file, **kwargs)
             return
+        # else, create a directory
+        file = Path(file)
+        self.write_parquet_dir(file.parent, chunk_size=chunk_size, start_index=start_index, prefix=file.stem, **kwargs)
 
+    def write_parquet_dir(self, outdir: Path, chunk_size: int | bool | None = 10_000, start_index: int = 0,
+                          prefix='part', **kwargs):
+        """Write batched data to a directory as parquet files.
+
+        Writes batches returned by ``collect_batches()`` into ``outdir`` as
+        individual parquet files. File names use the provided prefix followed by a
+        zero-padded numeric index, for example ``part-000000.parquet``.
+
+        Args:
+            outdir: Directory where parquet files will be written. The directory is
+                created if it does not already exist.
+            chunk_size: Number of rows/items to include in each batch. If ``True``,
+                defaults to ``10_000``. Must be a positive integer.
+            start_index: Initial numeric index used in generated file names. Must be
+                a non-negative integer.
+            prefix: Prefix used for generated parquet file names.
+            **kwargs: Additional keyword arguments passed to each batch's
+                ``write_parquet()`` method.
+
+        Raises:
+            ValueError: If ``chunk_size`` is not a positive integer, or if
+                ``start_index`` is not a non-negative integer.
+
+        Example:
+            Write batches to a directory using the default file name prefix:
+
+            ```python
+            writer.write_parquet_dir(Path("output/parquet"), chunk_size=10_000)
+            ```
+        """
         if chunk_size is True:
             chunk_size = 10_000
         if not isinstance(chunk_size, int) or chunk_size <= 0:
@@ -47,14 +86,11 @@ class IOMixin:
         if not isinstance(start_index, int) or start_index < 0:
             raise ValueError('start_index must be a non-negative integer')
 
-        outpath = Path(file)
-        outpath.parent.mkdir(exist_ok=True)
-        file_prefix = str(outpath.with_suffix('').stem)
-
+        outdir = Path(outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
         idx = start_index
         for chunk in self.collect_batches(chunk_size=chunk_size):  # type: ignore[attr-defined]
-            outfile = f'{file_prefix}-{idx:05d}.parquet'
-            chunk.write_parquet(outpath.parent / outfile, **kwargs)
+            chunk.write_parquet(outdir / f'{prefix}-{idx:06d}.parquet', **kwargs)
             idx += 1
 
     def write_csv(self, file, chunk_size: int | None | bool = None, **kwargs) -> None:
@@ -64,8 +100,6 @@ class IOMixin:
         the query is streamed and appended to the same csv file, writing the header only
         once for the first chunk.
         """
-        from pathlib import Path
-
         # normalize alias kwargs
         if 'has_header' in kwargs and 'include_header' not in kwargs:
             kwargs['include_header'] = kwargs.pop('has_header')

@@ -227,7 +227,19 @@ def test_write_parquet_chunked_prefix(sqlite_engine, tmp_path):
     users = scan_table('users', sqlite_engine).order_by('id')
     base = tmp_path / 'users.parquet'
     users.write_parquet(base, chunk_size=2)
-    # Expect part files like users-00000.parquet and users-00001.parquet
+    # expect part files like users-00000.parquet and users-00001.parquet
+    parts = sorted(tmp_path.glob('users-*.parquet'))
+    assert len(parts) >= 2
+    df = pl.read_parquet(str(tmp_path / 'users-*.parquet'))
+    assert df.shape[0] == 4
+    assert set(df['id'].to_list()) == {1, 2, 3, 4}
+
+
+def test_write_parquet_dir_chunked_prefix(sqlite_engine, tmp_path):
+    users = scan_table('users', sqlite_engine).order_by('id')
+    base = tmp_path
+    users.write_parquet_dir(base, chunk_size=2, prefix='users')
+    # expect part files like users-00000.parquet and users-00001.parquet
     parts = sorted(tmp_path.glob('users-*.parquet'))
     assert len(parts) >= 2
     df = pl.read_parquet(str(tmp_path / 'users-*.parquet'))

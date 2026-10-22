@@ -14,7 +14,8 @@ lazybear queries are lazy. They are executed only when materialized with methods
 - [`iter_rows`](#iter_rowsnamedfalse-chunk_size10_000)
 - [`explain`](#explain)
 - [`to_select`](#to_select)
-- [`write_parquet`](#write_parquetfile-chunk_sizenone-start_index0-kwargs)
+- [`write_parquet`](#write_parquet)
+- [`write_parquet_dir`](#write_parquet_dir)
 - [`write_csv`](#write_csvfile-chunk_sizenone-kwargs)
 
 ---
@@ -174,6 +175,7 @@ with engine.connect() as conn:
 ```
 ---
 
+<a name="write_parquet"></a>
 ## `write_parquet(file, chunk_size=None, start_index=0, **kwargs)`
 
 [Back to contents](#contents)
@@ -192,6 +194,40 @@ Write query results to parquet.
 Write one parquet file:
 ```python
 users.write_parquet('users.parquet')
+```
+Write filtered results:
+```python
+users.filter(age=41).write_parquet('users_age_41.parquet')
+```
+Write in chunks (this will write to `users-000000.parquet`, `users-000001.parquet`, etc.:
+```python
+users.write_parquet(
+    'users.parquet',
+    chunk_size=10_000,
+)
+```
+---
+
+<a name="write_parquet_dir"></a>
+## `write_parquet_dir(outdir, chunk_size=10_000, start_index=0, prefix='part', **kwargs)`
+
+[Back to contents](#contents)
+
+Write query results to directory of parquet files.
+
+### Parameters
+
+- `outdir`: Output directory/folder.
+- `chunk_size`: Optional chunk size. If provided, output may be split across multiple files.
+- `start_index`: Starting index for chunked output filenames.
+- `prefix`: For parquet filename, use this prefix (defaults to `part` so `part-000001.parquet`)
+- `**kwargs`: Additional writer options.
+
+### Examples
+
+Write to directory (default chunk size of 10_000):
+```python
+users.write_parquet('users')
 ```
 Write filtered results:
 ```python

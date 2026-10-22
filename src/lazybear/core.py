@@ -781,7 +781,7 @@ class LazyBearFrame(IOMixin):
                     for tf in temp_frames:
                         tf._create_and_insert(conn)
                     try:
-                        res = conn.execution_options(stream_results=True).execute(sel)
+                        res = conn.execution_options(yield_per=chunk_size).execute(sel)
                         names = list(res.keys())
                         while True:
                             rows = res.fetchmany(chunk_size)
@@ -793,7 +793,7 @@ class LazyBearFrame(IOMixin):
                         for tf in temp_frames:
                             tf._cleanup(conn)
             else:
-                res = conn.execution_options(stream_results=True).execute(sel)
+                res = conn.execution_options(yield_per=chunk_size).execute(sel)
                 names = list(res.keys())
                 while True:
                     rows = res.fetchmany(chunk_size)
