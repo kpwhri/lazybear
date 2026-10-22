@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import closing
 from pathlib import Path
 
 
@@ -89,9 +90,10 @@ class IOMixin:
         outdir = Path(outdir)
         outdir.mkdir(parents=True, exist_ok=True)
         idx = start_index
-        for chunk in self.collect_batches(chunk_size=chunk_size):  # type: ignore[attr-defined]
-            chunk.write_parquet(outdir / f'{prefix}-{idx:06d}.parquet', **kwargs)
-            idx += 1
+        with closing(self.collect_batches(chunk_size=chunk_size)) as batches:  # type: ignore[attr-defined]
+            for chunk in batches:
+                chunk.write_parquet(outdir / f'{prefix}-{idx:06d}.parquet', **kwargs)
+                idx += 1
 
     def write_csv(self, file, chunk_size: int | None | bool = None, **kwargs) -> None:
         """Write results to a csv file using polars.

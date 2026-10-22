@@ -13,6 +13,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `write_parquet_dir` function to write directly to parquet
 - For `collect_batches`, now specifying the `yield_per` option, equaling the requested `chunk_size`
 
+## Changed
+
+- Improved handling of temp tables to better ensure deletion and avoid name clashes
+- Altered sqlalchemy connection options to improve `collect` and `collect_batches` (hopefully improving speed)
+
 ## [0.5.0] - 2026-10-20
 
 ### Added

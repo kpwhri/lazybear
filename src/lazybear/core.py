@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import uuid
 import warnings
-from typing import Any, Iterable, Iterator, Literal, Mapping, Sequence
+from contextlib import closing, contextmanager
+from typing import Any, Iterable, Iterator, Literal, Mapping, Sequence, Generator
 
 import polars as pl
 import sqlalchemy as sa
@@ -739,24 +740,12 @@ class LazyBearFrame(IOMixin):
         if limit is not None:
             sel = sel.limit(limit)
 
-        with self._engine.connect() as conn:
-            if temp_frames:
-                with conn.begin():
-                    for tf in temp_frames:
-                        tf._create_and_insert(conn)
-                    try:
-                        res = conn.execute(sel)
-                        rows = res.fetchall()
-                        names = res.keys()
-                    finally:
-                        for tf in temp_frames:
-                            tf._cleanup(conn)
-            else:
-                res = conn.execute(sel)
+        with self._query_connection(temp_frames) as conn:
+            with conn.execute(sel) as res:
+                names = list(res.keys())
                 rows = res.fetchall()
-                names = res.keys()
 
-        df = pl.DataFrame(rows, schema=list(names), infer_schema_length=infer_schema_length)
+        df = pl.DataFrame(rows, schema=names, infer_schema_length=infer_schema_length, orient='row')
         return clean_dataframe(self._engine, df)
 
     def explain(self) -> str:
@@ -767,48 +756,50 @@ class LazyBearFrame(IOMixin):
         except Exception:
             return str(sel)
 
-    def collect_batches(self, chunk_size: int = 10_000) -> Iterator[pl.DataFrame]:
-        """Yield polars DataFrames in chunks without loading all rows in memory."""
+    @contextmanager
+    def _query_connection(self, temp_frames) -> Iterator[sa.Connection]:
+        with self._engine.connect() as conn:
+            try:
+                if temp_frames:
+                    with conn.begin():
+                        for tf in temp_frames:
+                            tf._create_and_insert(conn)
+
+                        yield conn
+                else:
+                    yield conn
+            finally:
+                if temp_frames:
+                    # query transaction has already ended: create a new one for cleanup
+                    with conn.begin():
+                        for tf in reversed(temp_frames):
+                            tf._cleanup(conn)
+
+    def collect_batches(self, chunk_size: int = 10_000) -> Generator[pl.DataFrame, None, None]:
+        """Yield polars DataFrames in chunks without loading all rows into memory."""
         if not isinstance(chunk_size, int) or chunk_size <= 0:
             raise ValueError('chunk_size must be a positive integer')
 
         temp_frames = self._find_temp_frames()
         sel = self.to_select()
 
-        with self._engine.connect() as conn:
-            if temp_frames:
-                with conn.begin():
-                    for tf in temp_frames:
-                        tf._create_and_insert(conn)
-                    try:
-                        res = conn.execution_options(yield_per=chunk_size).execute(sel)
-                        names = list(res.keys())
-                        while True:
-                            rows = res.fetchmany(chunk_size)
-                            if not rows:
-                                break
-                            df = pl.DataFrame(rows, schema=names)
-                            yield clean_dataframe(self._engine, df)
-                    finally:
-                        for tf in temp_frames:
-                            tf._cleanup(conn)
-            else:
-                res = conn.execution_options(yield_per=chunk_size).execute(sel)
+        with self._query_connection(temp_frames) as conn:
+            with conn.execution_options(yield_per=chunk_size).execute(sel) as res:
                 names = list(res.keys())
-                while True:
-                    rows = res.fetchmany(chunk_size)
-                    if not rows:
-                        break
-                    df = pl.DataFrame(rows, schema=names)
+
+                for rows in res.partitions():
+                    df = pl.DataFrame(rows, schema=names, orient='row')
                     yield clean_dataframe(self._engine, df)
 
     def iter_rows(self, *, named: bool = False, chunk_size: int = 10_000) -> Iterator[tuple[Any, ...] | dict[str, Any]]:
         """Iterate over result rows with polars-compatible semantics."""
         if not isinstance(chunk_size, int) or chunk_size <= 0:
             raise ValueError('chunk_size must be a positive integer')
-        for chunk in self.collect_batches(chunk_size=chunk_size):
-            for row in chunk.iter_rows(named=named):
-                yield row
+
+        with closing(self.collect_batches(chunk_size=chunk_size)) as batches:
+            for chunk in batches:
+                for row in chunk.iter_rows(named=named):
+                    yield row
 
 
 class GroupedLazyBearFrame:
@@ -873,7 +864,8 @@ class TempLazyBearFrame(LazyBearFrame):
             _upstream: Sequence[LazyBearFrame] | None = None,
     ):
         self._df = df
-        self._table_name = table_name or f'lb_temp_{uuid.uuid4().hex[:8]}'
+        self._table_name = (f'lb_temp_{table_name[:12]}_{uuid.uuid4().hex[:8]}'
+                            if table_name else f'lb_temp_{uuid.uuid4().hex[:8]}')
         # need to handle tablename changes here
         if engine.dialect.name == 'mssql':
             self._table_name = self._table_name if self._table_name.startswith('#') else f'#{self._table_name}'
@@ -968,11 +960,13 @@ class TempLazyBearFrame(LazyBearFrame):
             metadata,
             *sa_cols,
             prefixes=prefixes,
+            schema='temp' if dialect == 'sqlite' else None,
             **create_kwargs,
         )
 
         create_stmt = sa.schema.CreateTable(table)
         conn.execute(create_stmt)
+        self._temp_table_created = True
 
         # try for connection-specific fast bulk insert
         try:
@@ -987,17 +981,31 @@ class TempLazyBearFrame(LazyBearFrame):
             if batch:
                 conn.execute(table.insert(), batch)
 
-        self._temp_table_created = True
-
     def _cleanup(self, conn: sa.Connection):
         """Best-effort cleanup of the temp table."""
         if self._temp_table_created:
+            dialect = conn.dialect.name
+
+            schema = None
+            if dialect == 'sqlite':
+                schema = 'temp'
+            elif dialect == 'postgresql':
+                schema = 'pg_temp'
+
+            table = sa.Table(self._table_name, sa.MetaData(), schema=schema)
+
             try:
-                conn.execute(sa.text(f'DROP TABLE {self._table_name}'))
+                if dialect == 'oracle':
+                    name = conn.dialect.identifier_preparer.format_table(table)
+                    conn.exec_driver_sql(f'TRUNCATE TABLE {name}')
+
+                conn.execute(sa.schema.DropTable(
+                    table,
+                    if_exists=dialect in ('sqlite', 'postgresql'),
+                ))
             except Exception as e:
-                # best-effort
                 warnings.warn(f'Failed to cleanup temp table {self._table_name}: {e}')
-            finally:
+            else:
                 self._temp_table_created = False
 
     def to_select(self) -> sa.Select:
@@ -1006,5 +1014,5 @@ class TempLazyBearFrame(LazyBearFrame):
     def collect(self, limit: int | None = None, *, infer_schema_length=200) -> pl.DataFrame:
         return super().collect(limit=limit, infer_schema_length=infer_schema_length)
 
-    def collect_batches(self, chunk_size: int = 10_000) -> Iterator[pl.DataFrame]:
+    def collect_batches(self, chunk_size: int = 10_000) -> Generator[pl.DataFrame, None, None]:
         return super().collect_batches(chunk_size=chunk_size)

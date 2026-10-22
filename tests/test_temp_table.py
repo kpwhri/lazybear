@@ -4,26 +4,19 @@ import sqlalchemy as sa
 from lazybear import col, scan_df, scan_table
 
 
-@pytest.fixture
-def hero_df():
-    return pl.DataFrame({
-        'name': ['Väinämöinen', 'Joukahainen', 'Ilmarinen'],
-        'power': [100, 50, 80]
-    })
 
-
-def test_temp_table_sqlite(sqlite_engine, hero_df):
-    lf = scan_df(hero_df, sqlite_engine, table_name='heroes')
+def test_temp_table_sqlite(sqlite_engine, hero_mini_df):
+    lf = scan_df(hero_mini_df, sqlite_engine, table_name='heroes')
 
     # check if we can select and filter
     out_df = lf.filter(col('power') > 60).select('name').collect()
-    exp_df = hero_df.filter(pl.col('power') > 60).select('name')
+    exp_df = hero_mini_df.filter(pl.col('power') > 60).select('name')
 
     assert out_df.shape == exp_df.shape
     assert sorted(out_df['name'].to_list()) == sorted(exp_df['name'].to_list())
 
 
-def test_temp_table_join_with_regular_table(sqlite_engine, hero_df):
+def test_temp_table_join_with_regular_table(sqlite_engine, hero_mini_df):
     with sqlite_engine.connect() as conn:
         conn.execute(sa.text('CREATE TABLE myth_info (name TEXT, origin TEXT)'))
         conn.execute(sa.text("INSERT INTO myth_info VALUES ('Väinämöinen', 'Kalevala')"))
@@ -31,7 +24,7 @@ def test_temp_table_join_with_regular_table(sqlite_engine, hero_df):
         conn.execute(sa.text("INSERT INTO myth_info VALUES ('Ilmarinen', 'Kalevala')"))
         conn.commit()
 
-    lf_temp = scan_df(hero_df, sqlite_engine, table_name='temp_heroes')
+    lf_temp = scan_df(hero_mini_df, sqlite_engine, table_name='temp_heroes')
     lf_table = scan_table('myth_info', sqlite_engine)
 
     # join df -> table
@@ -43,7 +36,7 @@ def test_temp_table_join_with_regular_table(sqlite_engine, hero_df):
     assert all(joined_df['origin'] == 'Kalevala')
 
 
-def test_regular_table_join_with_temp_table(sqlite_engine, hero_df):
+def test_regular_table_join_with_temp_table(sqlite_engine, hero_mini_df):
     with sqlite_engine.connect() as conn:
         conn.execute(sa.text('CREATE TABLE myth_info (name TEXT, origin TEXT)'))
         conn.execute(sa.text("INSERT INTO myth_info VALUES ('Väinämöinen', 'Kalevala')"))
@@ -51,7 +44,7 @@ def test_regular_table_join_with_temp_table(sqlite_engine, hero_df):
         conn.execute(sa.text("INSERT INTO myth_info VALUES ('Ilmarinen', 'Kalevala')"))
         conn.commit()
 
-    lf_temp = scan_df(hero_df, sqlite_engine, table_name='temp_heroes')
+    lf_temp = scan_df(hero_mini_df, sqlite_engine, table_name='temp_heroes')
     lf_table = scan_table('myth_info', sqlite_engine)
 
     # join table -> df
@@ -63,8 +56,8 @@ def test_regular_table_join_with_temp_table(sqlite_engine, hero_df):
     assert all(joined_df['origin'] == 'Kalevala')
 
 
-def test_temp_table_cleanup(sqlite_engine, hero_df):
-    lf = scan_df(hero_df, sqlite_engine, table_name='cleanup_test')
+def test_temp_table_cleanup(sqlite_engine, hero_mini_df):
+    lf = scan_df(hero_mini_df, sqlite_engine, table_name='cleanup_test')
     lf.collect()
 
     # after collect, the table should be dropped
@@ -73,9 +66,9 @@ def test_temp_table_cleanup(sqlite_engine, hero_df):
         assert res.fetchone() is None
 
 
-def test_temp_table_multiple_collects(sqlite_engine, hero_df):
+def test_temp_table_multiple_collects(sqlite_engine, hero_mini_df):
     # each collect should recreate and then cleanup
-    lf = scan_df(hero_df, sqlite_engine, table_name='multi_test')
+    lf = scan_df(hero_mini_df, sqlite_engine, table_name='multi_test')
 
     df1 = lf.collect()
     assert df1.shape == (3, 2)

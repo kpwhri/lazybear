@@ -7,6 +7,14 @@ import sqlalchemy as sa
 from lazybear import scan_table
 
 
+@pytest.fixture
+def hero_mini_df():
+    return pl.DataFrame({
+        'name': ['Väinämöinen', 'Joukahainen', 'Ilmarinen'],
+        'power': [100, 50, 80]
+    })
+
+
 @pytest.fixture()
 def users_df():
     return pl.from_records([
