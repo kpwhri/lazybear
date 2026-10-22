@@ -15,6 +15,7 @@ from lazybear.deprecated import deprecated_param
 from lazybear.engine import _inline_for_select, _normalize_predicate, _same_server
 from lazybear.expressions import Expr, AliasedExpr
 from lazybear.io import IOMixin
+from lazybear.optimizer import optimize_query
 from lazybear.protocol import LazyBearFrameCompatible
 
 
@@ -729,7 +730,7 @@ class LazyBearFrame(IOMixin):
                 seen.add(t._table_name)
         return unique_temps
 
-    def collect(self, limit: int | None = None, *, infer_schema_length=200) -> pl.DataFrame:
+    def collect(self, limit: int | None = None, *, infer_schema_length=200, optimize=None) -> pl.DataFrame:
         """Execute and return a polars DataFrame.
 
         If `limit` is provided, apply a limit/top where supported by the backend (sqlalchemy will translate limit).
@@ -740,6 +741,8 @@ class LazyBearFrame(IOMixin):
         if limit is not None:
             sel = sel.limit(limit)
 
+        if optimize:
+            sel = optimize_query(sel, self._engine, optimize)
         with self._query_connection(temp_frames) as conn:
             with conn.execute(sel) as res:
                 names = list(res.keys())
@@ -748,8 +751,10 @@ class LazyBearFrame(IOMixin):
         df = pl.DataFrame(rows, schema=names, infer_schema_length=infer_schema_length, orient='row')
         return clean_dataframe(self._engine, df)
 
-    def explain(self) -> str:
+    def explain(self, *, optimize=None) -> str:
         sel = self.to_select()
+        if optimize:
+            sel = optimize_query(sel, self._engine, optimize)
         try:
             compiled = sel.compile(self._engine, compile_kwargs={'literal_binds': True})
             return str(compiled)
@@ -775,13 +780,15 @@ class LazyBearFrame(IOMixin):
                         for tf in reversed(temp_frames):
                             tf._cleanup(conn)
 
-    def collect_batches(self, chunk_size: int = 10_000) -> Generator[pl.DataFrame, None, None]:
+    def collect_batches(self, chunk_size: int = 10_000, *, optimize=None) -> Generator[pl.DataFrame, None, None]:
         """Yield polars DataFrames in chunks without loading all rows into memory."""
         if not isinstance(chunk_size, int) or chunk_size <= 0:
             raise ValueError('chunk_size must be a positive integer')
 
         temp_frames = self._find_temp_frames()
         sel = self.to_select()
+        if optimize:
+            sel = optimize_query(sel, self._engine, optimize)
 
         with self._query_connection(temp_frames) as conn:
             with conn.execution_options(yield_per=chunk_size).execute(sel) as res:
@@ -791,12 +798,13 @@ class LazyBearFrame(IOMixin):
                     df = pl.DataFrame(rows, schema=names, orient='row')
                     yield clean_dataframe(self._engine, df)
 
-    def iter_rows(self, *, named: bool = False, chunk_size: int = 10_000) -> Iterator[tuple[Any, ...] | dict[str, Any]]:
+    def iter_rows(self, *, named: bool = False, chunk_size: int = 10_000, optimize=None) -> Iterator[
+        tuple[Any, ...] | dict[str, Any]]:
         """Iterate over result rows with polars-compatible semantics."""
         if not isinstance(chunk_size, int) or chunk_size <= 0:
             raise ValueError('chunk_size must be a positive integer')
 
-        with closing(self.collect_batches(chunk_size=chunk_size)) as batches:
+        with closing(self.collect_batches(chunk_size=chunk_size, optimize=optimize)) as batches:
             for chunk in batches:
                 for row in chunk.iter_rows(named=named):
                     yield row
