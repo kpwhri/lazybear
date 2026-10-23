@@ -26,6 +26,7 @@ The purpose of this library is to provide lazy, polars-like access to a single s
     - [Date is in Interval](temporal.md#in_interval)
     - [Date is in Window](temporal.md#in_window)
     - [Check if Intervals Overlap](temporal.md#intervals_overlap)
+- [DataTypes/Type Aliases](dtypes.md)
 
 ## Installation
 
