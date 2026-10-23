@@ -17,7 +17,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Improved handling of temp tables to better ensure deletion and avoid name clashes
 - Altered sqlalchemy connection options to improve `collect` and `collect_batches` (hopefully improving speed)
-- Integrated optional (and experimental) optimization using sqlglot (added as dependency) + tests
+- Integrated optional (and experimental) optimization using sqlglot (added as dependency) + tests + doco
 
 ## [0.5.0] - 2026-10-20
 

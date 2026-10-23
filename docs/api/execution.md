@@ -9,18 +9,19 @@ lazybear queries are lazy. They are executed only when materialized with methods
 
 ## Contents
 
-- [`collect`](#collectlimitnone-infer_schema_length200)
-- [`collect_batches`](#collect_batcheschunk_size10_000)
-- [`iter_rows`](#iter_rowsnamedfalse-chunk_size10_000)
+- [`collect`](#collect)
+- [`collect_batches`](#collect_batches)
+- [`iter_rows`](#iter_rows)
 - [`explain`](#explain)
 - [`to_select`](#to_select)
 - [`write_parquet`](#write_parquet)
 - [`write_parquet_dir`](#write_parquet_dir)
-- [`write_csv`](#write_csvfile-chunk_sizenone-kwargs)
+- [`write_csv`](#write_csv)
 
 ---
 
-## `collect(limit=None, infer_schema_length=200)`
+<a name="collect"></a>
+## `collect(limit=None, *, infer_schema_length=200)`
 
 [Back to contents](#contents)
 
@@ -60,6 +61,7 @@ df = (
 ```
 ---
 
+<a name="collect_batches"></a>
 ## `collect_batches(chunk_size=10_000)`
 
 [Back to contents](#contents)
@@ -91,6 +93,7 @@ for batch in users.collect_batches(chunk_size=10_000):
 ```
 ---
 
+<a name="iter_rows"></a>
 ## `iter_rows(named=False, chunk_size=10_000)`
 
 [Back to contents](#contents)
@@ -242,6 +245,7 @@ users.write_parquet(
 ```
 ---
 
+<a name="write_csv"></a>
 ## `write_csv(file, chunk_size=None, **kwargs)`
 
 [Back to contents](#contents)
