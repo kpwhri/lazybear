@@ -14,6 +14,9 @@ The purpose of this library is to provide lazy, polars-like access to a single s
   - [Groups and Aggregation](api/grouping.md)
   - [Execution and Output](api/execution.md)
 - [Expressions & Namespaces](expressions.md)
+- [(Experimental) Query Optimization](api/optimize_query.md)
+- Functions
+  - [Temporal Expressions](temporal.md): Calculate age
 
 ## Installation
 

@@ -63,7 +63,10 @@ def test_calculate_age_with_reference_column_alias(age_df):
     assert result['age'].to_list() == [26, 26, 25, 24, 25, None, None, 0, 45, 23, 24, -1]
 
 
-@pytest.mark.parametrize('reference', [date(2026, 10, 21), lit(date(2026, 10, 21))])
+@pytest.mark.parametrize('reference', [
+    date(2026, 10, 21),
+    lit(date(2026, 10, 21)),
+])
 def test_calculate_age_with_static_reference(age_df, reference):
     result = (
         age_df
