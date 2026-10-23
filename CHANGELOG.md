@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Additional temporal expressions: `date_add`, `date_diff`, `date_trunc`, `date_part`, `between`, `in_interval`,
+  `in_window`, `intervals_overlap` + tests and doco
+
 ## [0.6.0] - 2026-10-22
 
 ### Added

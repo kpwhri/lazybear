@@ -3,19 +3,21 @@ import re
 import warnings
 from datetime import date, datetime
 
+import sqlalchemy as sa
+
 from lazybear.expressions import Expr, lit, col
 
 
-def str_to_col(colname) -> Expr:
+def str_to_col(colname) -> Expr | sa.ColumnElement:
     if isinstance(colname, str):
         warnings.warn(f"Column name '{colname}' was passed as `str` instead of `col`, use `lb.col('{colname}')`")
         colname = col(colname)
     return colname
 
 
-def date_to_col_or_lit(colname) -> Expr:
+def date_to_col_or_lit(colname) -> Expr | sa.ColumnElement:
     if isinstance(colname, str):
-        if m := re.match(r'(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})', colname):
+        if m := re.fullmatch(r'(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})', colname):
             year = int(m.group('y'))
             month = int(m.group('m'))
             day = int(m.group('d'))

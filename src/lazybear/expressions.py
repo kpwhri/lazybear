@@ -60,6 +60,10 @@ class Expr:
     def __or__(self, other):
         return self._bin(other, sa.sql.operators.or_)
 
+    def between(self, lower: Any, upper: Any) -> 'Expr':
+        """Check whether a value is within inclusive bounds (SQL BETWEEN)."""
+        return Expr(lambda lf: self.to_sa(lf).between(_to_sa(lower, lf), _to_sa(upper, lf)))
+
     def is_null(self) -> 'Expr':
         return Expr(lambda lf: self.to_sa(lf).is_(None))
 

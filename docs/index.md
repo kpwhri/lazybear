@@ -13,10 +13,19 @@ The purpose of this library is to provide lazy, polars-like access to a single s
   - [Joins](api/joins.md)
   - [Groups and Aggregation](api/grouping.md)
   - [Execution and Output](api/execution.md)
+  - [(Experimental) Query Optimization](api/optimize_query.md)
 - [Expressions & Namespaces](expressions.md)
-- [(Experimental) Query Optimization](api/optimize_query.md)
 - Functions
-  - [Temporal Expressions](temporal.md): Calculate age
+  - [Temporal Functions](temporal.md): Cross-db functions that handle dates/time
+    - [Calculate Age](temporal.md#calc_age)
+    - [Date Add](temporal.md#date_add)
+    - [Date Difference](temporal.md#date_diff)
+    - [Truncate Date](temporal.md#date_trunc)
+    - [Get Date Parts](temporal.md#date_part)
+    - [Between Dates](temporal.md#between)
+    - [Date is in Interval](temporal.md#in_interval)
+    - [Date is in Window](temporal.md#in_window)
+    - [Check if Intervals Overlap](temporal.md#intervals_overlap)
 
 ## Installation
 
