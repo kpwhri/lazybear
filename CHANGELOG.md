@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-23
+
 ### Added
 
 - Additional temporal expressions: `date_add`, `date_diff`, `date_trunc`, `date_part`, `between`, `in_interval`,
@@ -116,7 +118,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Separated out as a distinct repo
 
-[unreleased]: https://github.com/kpwhri/lazybear/compare/v0.6.0..HEAD
+[unreleased]: https://github.com/kpwhri/lazybear/compare/v0.6.1..HEAD
+
+[0.6.1]: https://github.com/kpwhri/lazybear/compare/v0.6.0..v0.6.1
 
 [0.6.0]: https://github.com/kpwhri/lazybear/compare/v0.5.0..v0.6.0
 
