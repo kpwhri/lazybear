@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-17
+
 ### Added
 
 - `sql` as alias for `scan_sql_query` to align with polars API
@@ -126,7 +128,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Separated out as a distinct repo
 
-[unreleased]: https://github.com/kpwhri/lazybear/compare/v0.6.1..HEAD
+[unreleased]: https://github.com/kpwhri/lazybear/compare/v0.6.2..HEAD
+
+[0.6.2]: https://github.com/kpwhri/lazybear/compare/v0.6.1..v0.6.2
 
 [0.6.1]: https://github.com/kpwhri/lazybear/compare/v0.6.0..v0.6.1
 
