@@ -1,7 +1,8 @@
 import polars as pl
 import pytest
 
-from lazybear import scan_table, col, scan_sql_query
+import lazybear as lb
+from lazybear import scan_table, col
 
 
 def test_select_filter_collect(sqlite_engine):
@@ -208,8 +209,17 @@ def test_sort_desc_flags_validation(sqlite_engine):
 
 
 def test_sql_query(sqlite_engine):
-    df = scan_sql_query('select name, age from users where age > 30', sqlite_engine).filter(col('age') < 60).select(
+    df = lb.scan_sql_query('select name, age from users where age > 30', sqlite_engine).filter(col('age') < 60).select(
         'name').collect()
+    assert len(df['name'].to_list()) == 2
+
+
+def test_sql_query_with_sql(sqlite_engine):
+    df = (
+        lb.sql('select name, age from users where age > 30', sqlite_engine)
+        .filter(col('age') < 60)
+        .select('name')
+    ).collect()
     assert len(df['name'].to_list()) == 2
 
 

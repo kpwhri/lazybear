@@ -86,7 +86,7 @@ def scan_sql_query(query: str, engine: Engine, columns: Sequence[str] | None = N
         raise TypeError('query must be a string')
     q_strip = query.lstrip().lower()
     if not q_strip.startswith('select'):
-        raise ValueError('sca_sql_query() expects a SELECT statement')
+        raise ValueError('sql() expects a SELECT statement')
 
     names: list[str]
     if columns is None:
@@ -104,3 +104,6 @@ def scan_sql_query(query: str, engine: Engine, columns: Sequence[str] | None = N
     sq = txt.subquery()
     cols = {c.key: sq.c[c.key] for c in sq.c}
     return LazyBearFrame(engine, sq, cols)
+
+
+sql = scan_sql_query
