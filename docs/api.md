@@ -12,9 +12,9 @@ for analysis.
 ## Contents
 
 - [Creating frames](api/scanning.md)
-    - [`scan_table`](api/scanning.md#scan_tabletable_name-engine-schemanone-lowercasetrue)
-    - [`scan_sql_query`](api/scanning.md#scan_sql_queryquery-engine-columnsnone)
-    - [`scan_df`](api/scanning.md#scan_dfdf-engine-table_namenone)
+    - [`scan_table`](api/scanning.md#scan_table)
+    - [`sql`](api/scanning.md#sql) (formerly, `scan_sql_query`)
+    - [`scan_df`](api/scanning.md#scan_df)
 - [`LazyBearFrame`](api/lazybearframe.md)
     - [Properties](api/lazybearframe.md#properties)
     - [`select`](api/lazybearframe.md#selectitems)
