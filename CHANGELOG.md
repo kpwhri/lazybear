@@ -11,6 +11,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `sql` as alias for `scan_sql_query` to align with polars API
 
+### Fixed
+
+- Added missing doco for scanning methods
+
 ## [0.6.1] - 2026-10-23
 
 ### Added
